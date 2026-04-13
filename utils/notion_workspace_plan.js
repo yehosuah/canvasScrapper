@@ -285,7 +285,7 @@
       discoveredAt: record.discoveredAt,
       contentPathType: record.contentPathType,
       extractionStatus: record.extractionStatus,
-      contentReadinessState: "notion_content_planned",
+      contentReadinessState: record.dueDate ? "automation_ready" : "discovered",
       dueDate: record.dueDate || null,
       dueDateAvailability: Boolean(record.dueDate),
       automationEligibility: record.automationEligibility || []
@@ -318,7 +318,7 @@
       discoveredAt: course.discoveredAt,
       contentPathType: "unknown",
       extractionStatus: "not_applicable",
-      contentReadinessState: "metadata_planned",
+      contentReadinessState: "discovered",
       automationEligibility: ["flashcard_generation", "review_question_generation"]
     });
   }

@@ -198,7 +198,7 @@
         latestEnrichmentResult: normalizedExtractionState.latestEnrichmentResult || null
       },
       plannerMetadata: {
-        contentInventoryVersion: 1,
+        contentInventoryVersion: 2,
         contentPathTypes: contentInventory.summary,
         notionDestinationMode: null
       }
@@ -209,9 +209,9 @@
     buildCourseKey,
     buildExportManifest,
     createCourseRecord,
-      createDocumentRecord,
-      createContentItemRecord,
-      createSyncRecord,
+    createDocumentRecord,
+    createContentItemRecord,
+    createSyncRecord,
     mergeCourseRecords,
     syncRecordsForDocuments
   };

@@ -42,7 +42,7 @@
       },
       plannerMetadata: {
         ...(manifest.plannerMetadata || {}),
-        contentInventoryVersion: 1,
+        contentInventoryVersion: 2,
         contentPathTypes: inventory.summary,
         notionDestinationMode: null
       }

@@ -4,176 +4,173 @@ Manifest V3 Chrome extension for:
 
 - scanning Canvas courses or dashboard-visible courses
 - downloading Canvas-hosted artifacts locally
-- ingesting structured academic content into Notion under a user-supplied parent page
+- ingesting structured academic content into Notion
+- extracting, normalizing, chunking, and tracking content for later Codex automations
 
 Product intent:
 
-This repo is not "Canvas downloader + Notion export".
+This repo is not "Canvas downloader + Notion export."
 
-It is Canvas -> Notion academic knowledge ingestion so later Codex automations can operate on real course content, provenance, artifacts, and sync state.
+It is a content-ready academic knowledge system:
 
-## Phase 3 status
+Canvas -> normalized records -> extracted text -> chunks -> Notion enrichment -> future automation inputs.
+
+## Phase 4 status
 
 Implemented now:
 
 - single-course and multi-course Canvas scan still work
 - dry-run workspace planning still works
-- real Notion token-based auth for this local-only MV3 architecture
-- destination page URL parsing and validation
-- general workspace mode
-- class-specific workspace mode
-- real Notion database/page creation and update
-- course hub page creation in general mode
-- Canvas-native text ingestion into Notion page blocks
-- file artifact row creation with honest attachment/extraction states
-- local-to-remote mapping persistence for retry-safe updates
-- live sync job/result persistence with created/updated/skipped/failed counts
+- live Notion sync still works
+- Canvas-native HTML content enters a Phase 4 extraction queue
+- supported file artifacts enter same queue with honest unsupported/failure states
+- extraction metadata, queue state, chunk records, and enrichment results persist in `chrome.storage.local`
+- extracted content is chunked deterministically with stable-enough chunk IDs for later updates
+- Notion sync can reflect extraction status, extracted text presence, chunk count, and enriched page content
 
-Not implemented yet:
+Still not implemented:
 
-- OAuth flow with backend exchange
-- AI summaries, flashcards, review questions, weekly digests
-- document text extraction from PDFs/DOCX/PPTX/XLSX
-- rich Notion relation graph between databases
-- large/multipart Notion file upload flow
+- OCR for image-only PDFs or image files
+- PPT/PPTX extraction
+- XLS/XLSX extraction
+- legacy `.doc` extraction
+- flashcards, review questions, weekly digests, or other automation outputs
 
-## Auth setup
+## Phase 4 pipeline
 
-This extension currently uses a manual Notion internal integration token.
+Useful records now move through explicit lifecycle/state fields.
 
-Reason:
+Primary processing lifecycle:
 
-- pure MV3 extension has no secure backend for public OAuth code exchange + client secret storage
-- manual token is workable and honest for local-only architecture
+- `discovered`
+- `downloaded`
+- `extraction_pending`
+- `extracted`
+- `extraction_failed`
+- `unsupported_for_extraction`
+- `chunked`
+- `notion_enriched`
+- `automation_ready`
 
-Setup steps:
+Supporting status fields:
 
-1. In Notion, create an internal integration with read and insert/update content capabilities.
-2. Copy integration token.
-3. Share target parent page with that integration inside Notion.
-4. Open extension popup.
-5. Paste integration token into `Notion integration token`.
-6. Paste destination Notion page URL.
-7. Choose `General academic workspace` or `Class-specific workspace`.
-8. Click `Save`.
-9. Click `Validate`.
+- `extractionStatus`: `not_started`, `pending`, `extracted`, `failed`, `unsupported`, `not_applicable`
+- `normalizationStatus`: `not_started`, `normalized`, `failed`, `not_applicable`
+- `enrichmentStatus`: `not_started`, `pending`, `notion_enriched`, `failed`, `not_applicable`
 
-If validation fails with 403/404 behavior, most likely cause is page not shared with integration.
+Core extracted-content fields on normalized records:
 
-## User flow
+- `extractedText`
+- `extractedHtml`
+- `extractionMethod`
+- `extractionVersion`
+- `extractedAt`
+- `wordCount`
+- `charCount`
+- `headingCount`
+- `chunkCount`
+- `chunkIds`
+- `unsupportedReason`
+- `failureReason`
 
-1. Open Canvas dashboard or one course.
-2. Scan current course or selected/all visible courses.
-3. Review discovered files in popup.
-4. Optionally download local artifacts.
-5. Add Notion token and destination page URL.
-6. Choose workspace mode.
-7. Validate destination.
-8. Plan workspace if you want dry-run review.
-9. Run `Live Sync`.
-10. Inspect sync summary in popup.
+## Supported extraction types
 
-## Notion workspace model
+### Canvas-native HTML
 
-### General workspace mode
-
-Parent page becomes multi-course root.
-
-Extension creates or reuses:
-
-- `Courses` database
-- `Content` database
-- `Deliverables` database
-- `Study Assets` database
-- one course hub page per course
-
-### Class-specific mode
-
-Provided parent page is treated as one course hub/root.
-
-Extension creates or reuses beneath that page:
-
-- `Content` database
-- `Deliverables` database
-- `Study Assets` database
-
-It does not create top-level multi-course `Courses` database in this mode.
-
-## What gets ingested
-
-### Canvas-native text content
-
-Examples:
+Supported:
 
 - Pages
+- Syllabus
 - Assignment descriptions
-- Syllabus text
-- module overview pages
-- home content when visible as real HTML/text
+- module item/course HTML captured during scan
 
 Behavior:
 
-- extension captures page body HTML/text during scan
-- live sync creates or updates Notion row pages
-- row page body receives readable Notion blocks
-- provenance is stored in database properties and page body
+- readable content is normalized into semantic HTML + plain text
+- headings, paragraphs, lists, and simple tables are preserved pragmatically
+- navigation/chrome noise is stripped
 
 ### File artifacts
 
-Examples:
+Supported with real extraction:
 
 - PDF
 - DOCX
-- PPTX
-- XLSX
-- ZIP
+- TXT
+- HTML/HTM files when discovered as downloadable artifacts
 
 Behavior:
 
-- extension creates `Content` row with provenance + artifact metadata
-- if source is directly fetchable and small enough for current single-part upload path, extension uploads and attaches file to page
-- if attachment is not feasible, row is still created and `Processing Status` honestly stays `extraction_pending` or `failed`
-- no extracted text is fabricated
+- PDFs use bundled `pdfjs-dist`
+- DOCX uses bundled `mammoth`
+- TXT uses direct normalization
+- HTML files use DOM-based normalization through offscreen parsing
 
-Current practical limitation:
+### Unsupported-for-extraction bucket
 
-- current direct upload path uses Notion single-part upload behavior
-- oversized or otherwise inaccessible files do not get fake success states
+Honest unsupported states are persisted for:
 
-### External resources
+- PPT / PPTX
+- XLS / XLSX
+- images
+- legacy `.doc`
+- unknown binary files
+- external resource links without local extractable body
 
-Examples:
+No fake extraction success is written for unsupported types.
 
-- Google Docs links
-- websites
-- YouTube links
+## Chunking behavior
 
-Behavior:
+Chunking is deterministic and stored locally.
 
-- extension creates metadata rows when useful external links are discovered on scanned Canvas pages
-- external resources are marked as external
-- body content is not fabricated
+Current defaults:
 
-## Provenance and state
+- target chunk size: about `2200` characters
+- overlap: about `250` characters
+- order preserved
+- heading context carried forward per chunk when available
 
-Each ingested content row carries source metadata such as:
+Each chunk stores:
 
-- Canvas course ID/name
-- source section
-- source page title
-- source page URL
-- original Canvas URL
-- discovered date
-- sync timestamps
-- file flags
-- automation-ready boolean
+- `chunkId`
+- `chunkIndex`
+- `chunkText`
+- `tokenEstimate`
+- `headingContext`
+- `contentObjectId`
+- `sourceDocumentId`
+- `courseId`
+- provenance fields such as source URL/title
 
-Sync states stored now include:
+Chunk IDs are derived from source record + chunk index + chunk text hash, so repeated chunking with same input remains stable.
 
-- job states: `idle`, `validating`, `ready`, `syncing`, `partially_completed`, `completed`, `failed`, `blocked`
-- content processing states: `discovered`, `planned`, `notion_created`, `notion_updated`, `artifact_attached`, `extraction_pending`, `automation_ready`, `failed`
+## Notion enrichment representation
+
+Phase 4 does not redesign the Notion model. It extends the existing `Content` database and synced page bodies.
+
+Content rows now track extra properties such as:
+
+- processing status
+- extraction status
+- readiness
+- source category
+- extraction method
+- extracted text present
+- word count
+- char count
+- chunk count
+- unsupported reason
+
+Synced Notion content pages now:
+
+- keep provenance blocks
+- keep raw artifact/file attachment behavior
+- append extracted content when available
+- distinguish raw artifact present vs extracted text present vs chunked/automation-ready local state
 
 ## Storage keys
+
+Existing:
 
 - `canvasCourseScanState`
 - `canvasCourseExportManifest`
@@ -187,95 +184,87 @@ Sync states stored now include:
 - `notionLastSyncResult`
 - `notionMappings`
 
+New/extended for Phase 4:
+
+- `canvasContentExtractionState`
+
+Stored there:
+
+- extraction queue
+- extraction job history
+- extraction records keyed by `contentObjectId`
+- chunk records keyed by `contentObjectId`
+- latest Notion enrichment result
+
+`canvasCourseScanState` also carries compact `extractionSummary` for popup rendering.
+
 ## Key files
 
-- `background.js`
-  scan orchestration, runtime message boundary, downloads, Notion sync entrypoints
-- `content.js`
-  content script bridge for Canvas page detection and fetch/scrape
-- `popup.html` / `popup.js` / `popup.css`
-  popup UI for scan controls, token/destination setup, validation, planning, live sync, summary
-- `utils/extract.js`
-  Canvas DOM discovery plus page-body content capture and external-resource detection
-- `utils/records.js`
-  normalized course/document/content record builders and export manifest generation
-- `utils/content_states.js`
-  content inventory builder for direct-ingest content, file artifacts, deliverables, external resources
-- `utils/notion_auth.js`
-  local token persistence wrapper
-- `utils/notion_api.js`
-  real Notion HTTP client, validation, database/page/block operations, file upload helpers
-- `utils/notion_blocks.js`
-  pragmatic HTML/text -> Notion block conversion
-- `utils/notion_entities.js`
-  Notion database schemas and row property builders
-- `utils/notion_workspace.js`
-  create/reuse workspace structure, upsert rows, attach artifacts, persist mappings
-- `utils/notion_sync.js`
-  overview, validation, dry-run planning, live sync orchestration
+- [background.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/background.js)
+  scan orchestration, extraction queue orchestration, offscreen bridge, downloads, Notion entrypoints
+- [offscreen/offscreen.html](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/offscreen/offscreen.html)
+- [offscreen/offscreen.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/offscreen/offscreen.js)
+  DOM/PDF/DOCX extraction surface outside service worker
+- [utils/extract_content.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/extract_content.js)
+  extraction source classification and supported/unsupported routing
+- [utils/normalize_content.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/normalize_content.js)
+  HTML/text normalization into machine-usable content
+- [utils/chunk_content.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/chunk_content.js)
+  deterministic chunking
+- [utils/enrichment_records.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/enrichment_records.js)
+  extraction/chunk/enrichment record normalization
+- [utils/extraction_queue.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/extraction_queue.js)
+  queue and job-state helpers
+- [utils/content_states.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/content_states.js)
+  normalized content inventory merged with Phase 4 extraction state
+- [utils/notion_entities.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/notion_entities.js)
+  extended Notion schema/property mapping for extraction-aware rows
+- [utils/notion_workspace.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/notion_workspace.js)
+  schema upgrade + extracted-content page sync
 
-## Current limitations
+## Known limits
 
-- no browser/manual validation was run in this implementation pass
-- direct-ingest extraction depends on Canvas page HTML being accessible in scanned pages
-- Canvas pages with highly custom markup may degrade to paragraph fallback blocks
-- course hubs are minimal summary pages, not rich dashboards yet
-- file upload path is conservative; when upload cannot be completed honestly, row remains metadata-first
-- no relation property between `Content` and `Courses` databases yet
-- no downstream study-asset generation yet
+- PDF extraction works for text-based PDFs. Image-only/scanned PDFs without embedded text will fail honestly.
+- No OCR exists yet.
+- Chrome local storage is still being used for extracted text and chunk payloads. `unlimitedStorage` helps, but very large corpora will eventually need a more specialized local persistence strategy.
+- Notion page bodies can become large for long extracted documents. Current behavior is pragmatic, not optimized for huge multi-hundred-page artifacts.
+- Local Chrome download completion is separate from extraction fetches. Phase 4 extraction uses source fetches plus saved provenance; it does not read arbitrary local files from disk.
 
-## Validation run in this pass
+## Auth setup
 
-Executed:
+This extension still uses a manual Notion internal integration token.
+
+Setup:
+
+1. Create/share internal integration in Notion.
+2. Paste token into popup.
+3. Paste destination page URL.
+4. Validate.
+5. Plan or run live sync.
+6. Use Phase 4 extraction controls when scan data is ready.
+
+## Test checklist
+
+Minimum manual/CLI verification for Phase 4:
 
 - `node --check background.js`
-- `node --check content.js`
 - `node --check popup.js`
-- `node --check utils/extract.js`
-- `node --check utils/dedupe.js`
-- `node --check utils/records.js`
-- `node --check utils/content_states.js`
-- `node --check utils/notion_models.js`
-- `node --check utils/notion_storage.js`
-- `node --check utils/notion_auth.js`
-- `node --check utils/notion_api.js`
-- `node --check utils/notion_blocks.js`
-- `node --check utils/notion_entities.js`
-- `node --check utils/notion_validate.js`
-- `node --check utils/notion_workspace.js`
-- `node --check utils/notion_sync.js`
-- manifest JSON parse check
+- `node --check content.js`
+- `for f in utils/*.js offscreen/offscreen.js; do node --check "$f"; done`
+- run a mixed-record smoke test covering Canvas HTML, PDF candidate, and unsupported artifact types
+- confirm unsupported artifacts are marked `unsupported_for_extraction` / `unsupported`
+- confirm extraction queue persists across popup reload / extension worker restart
+- confirm chunking is deterministic for identical input
+- confirm scan flow still produces documents/content items without runtime errors
+- confirm live Notion sync still validates, plans, and runs
 
-Not run:
+## User flow
 
-- live Chrome extension manual test
-- live Canvas scan against real courses
-- live Notion API sync against real workspace
-
-## Manual test checklist
-
-1. Load unpacked extension in `chrome://extensions`.
-2. Confirm Chrome shows no manifest/runtime load errors.
-3. Scan one course from a course page.
-4. Scan multiple courses from dashboard.
-5. Confirm downloads still start for selected/all files.
-6. Paste valid Notion token and shared parent page URL.
-7. Validate in general mode.
-8. Validate in class-specific mode with selected course.
-9. Run dry-run `Plan`.
-10. Run `Live Sync`.
-11. Confirm Notion now contains:
-    `Courses`/`Content`/`Deliverables`/`Study Assets` structures in general mode, or class-specific children in class mode.
-12. Open some direct-ingest row pages and confirm readable blocks exist.
-13. Open some file-artifact rows and confirm either attached artifact or honest pending/failed status.
-14. Re-run sync and confirm existing rows update or skip instead of blindly duplicating.
-
-## Scope guardrails
-
-- no auth bypass
-- no locked-content bypass
-- no quiz scraping
-- no fake extraction
-- no fake upload
-- no fake sync success
-- no fake automation readiness
+1. Open Canvas dashboard or course.
+2. Scan current/selected courses.
+3. Review discovered records.
+4. Optionally download artifacts.
+5. Run `Run Extraction`.
+6. Retry failures if needed.
+7. Run `Enrich Notion` or regular `Live Sync`.
+8. Use stored extracted/chunked content later for automation workflows.

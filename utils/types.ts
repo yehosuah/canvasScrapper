@@ -105,6 +105,18 @@ export type ScanQueueState = {
   activeCourseId?: string | null;
 };
 
+export type ExtractionSummary = {
+  total: number;
+  extracted: number;
+  pending: number;
+  failed: number;
+  unsupported: number;
+  chunked: number;
+  notionEnriched: number;
+  automationReady: number;
+  latestMessage: string;
+};
+
 export type ScanState = {
   status: "idle" | "scanning" | "complete" | "error";
   message: string;
@@ -130,6 +142,7 @@ export type ScanState = {
     skipped: string[];
     courseId?: string | null;
   } | null;
+  extractionSummary?: ExtractionSummary;
 };
 
 export type NotionJobStatus =
@@ -179,14 +192,107 @@ export type ContentPathType = "direct_ingest" | "file_artifact" | "hybrid" | "un
 
 export type ContentReadinessState =
   | "discovered"
-  | "metadata_planned"
-  | "content_direct_ingest_candidate"
-  | "file_artifact_candidate"
+  | "downloaded"
   | "extraction_pending"
-  | "extraction_ready"
-  | "notion_content_planned"
+  | "extracted"
+  | "chunked"
+  | "notion_enriched"
+  | "automation_ready"
+  | "unsupported_for_extraction"
+  | "blocked";
+
+export type ExtractionProcessingState =
+  | "discovered"
+  | "downloaded"
+  | "extraction_pending"
+  | "extracted"
+  | "extraction_failed"
+  | "unsupported_for_extraction"
+  | "chunked"
+  | "notion_enriched"
   | "automation_ready"
   | "blocked";
+
+export type ExtractionStatus =
+  | "not_started"
+  | "pending"
+  | "extracted"
+  | "failed"
+  | "unsupported"
+  | "not_applicable";
+
+export type NormalizationStatus = "not_started" | "normalized" | "failed" | "not_applicable";
+
+export type EnrichmentStatus = "not_started" | "pending" | "notion_enriched" | "failed" | "not_applicable";
+
+export type ContentChunkRecord = {
+  chunkId: string;
+  chunkIndex: number;
+  chunkText: string;
+  tokenEstimate: number;
+  headingContext: string;
+  contentObjectId: string;
+  sourceDocumentId?: string | null;
+  courseId: string;
+  courseName: string;
+  contentType: string;
+  sourceCanvasUrl: string;
+  sourcePageTitle: string;
+  extractionVersion: string;
+};
+
+export type ExtractionRecord = {
+  contentObjectId: string;
+  processingState: ExtractionProcessingState;
+  extractionStatus: ExtractionStatus;
+  normalizationStatus: NormalizationStatus;
+  enrichmentStatus: EnrichmentStatus;
+  extractionMethod: string;
+  extractionVersion: string;
+  extractedText: string;
+  extractedHtml: string;
+  extractedAt?: string | null;
+  downloadedAt?: string | null;
+  lastAttemptAt?: string | null;
+  wordCount: number;
+  charCount: number;
+  headingCount: number;
+  chunkCount: number;
+  chunkIds: string[];
+  normalizationSummary?: Record<string, unknown> | null;
+  unsupportedReason?: string;
+  failureReason?: string;
+  lastEnrichedAt?: string | null;
+  automationReady: boolean;
+  updatedAt: string;
+};
+
+export type ExtractionJob = {
+  jobId: string;
+  contentObjectId: string;
+  sourceCategory: string;
+  trigger: string;
+  status: "queued" | "processing" | "completed" | "failed" | "unsupported";
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+  lastError?: string;
+};
+
+export type ExtractionState = {
+  version: number;
+  queue: ExtractionJob[];
+  jobHistory: ExtractionJob[];
+  recordsByContentId: Record<string, ExtractionRecord>;
+  chunksByContentId: Record<string, ContentChunkRecord[]>;
+  latestEnrichmentResult?: {
+    finishedAt?: string;
+    syncedCount?: number;
+    failedCount?: number;
+    summary?: string;
+  } | null;
+  updatedAt: string;
+};
 
 export type ContentObjectType =
   | "course"
@@ -235,8 +341,13 @@ export type NotionPlanObject = {
   sourcePageTitle?: string;
   discoveredAt?: string;
   contentPathType?: ContentPathType;
-  extractionStatus?: string;
+  extractionStatus?: ExtractionStatus;
+  processingState?: ExtractionProcessingState;
+  supportedExtraction?: boolean;
   contentReadinessState?: ContentReadinessState;
+  enrichmentStatus?: EnrichmentStatus;
+  chunkCount?: number;
+  automationReady?: boolean;
   automationEligibility?: string[];
   dueDate?: string | null;
   dueDateAvailability?: boolean;
