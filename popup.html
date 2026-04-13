@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Academic Ingestor</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup">
+      <header class="hero">
+        <p class="eyebrow">Canvas Academic Ingestor</p>
+        <h1 id="courseName">Canvas</h1>
+        <p id="pageModeLine" class="modeLine">Unsupported page</p>
+        <p id="statusLine" class="status">Open a Canvas course or dashboard to begin.</p>
+      </header>
+
+      <section class="controls notionPanel">
+        <div class="sectionHeader">
+          <div>
+            <h2>Notion Auth And Destination</h2>
+            <p id="notionStatusLine" class="status">Save token and destination, then validate access before sync.</p>
+          </div>
+          <span id="notionReadinessBadge" class="pill">Destination needed</span>
+        </div>
+
+        <div class="notionFieldGrid">
+          <label class="field fieldWide">
+            <span>Notion integration token</span>
+            <input id="notionAccessToken" type="password" placeholder="secret_xxx">
+            <small class="fieldHint">Manual internal integration token. Leave blank to keep saved token.</small>
+          </label>
+          <label class="field fieldWide">
+            <span>Notion destination page URL</span>
+            <input id="notionDestinationUrl" type="text" placeholder="https://www.notion.so/...">
+            <small class="fieldHint">Paste parent page user shared with integration.</small>
+          </label>
+        </div>
+
+        <div class="radioRow">
+          <label class="choiceChip">
+            <input type="radio" name="notionWorkspaceMode" value="general" checked>
+            <span>General academic workspace</span>
+          </label>
+          <label class="choiceChip">
+            <input type="radio" name="notionWorkspaceMode" value="class_specific">
+            <span>Class-specific workspace</span>
+          </label>
+        </div>
+
+        <div class="notionFieldGrid">
+          <label id="notionTargetCourseField" class="field hidden">
+            <span>Target course</span>
+            <select id="notionTargetCourseId">
+              <option value="">Select scanned course</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="infoStack">
+          <p id="notionAuthLine" class="itemDetail">Auth: token missing.</p>
+          <p id="notionActionLine" class="itemDetail">Action: waiting for token and destination.</p>
+          <p id="notionDestinationLine" class="itemDetail">Destination: not set.</p>
+          <p id="notionLastValidationLine" class="itemDetail">Validation: not run.</p>
+          <p id="notionLatestJobLine" class="itemDetail">Latest sync: idle.</p>
+        </div>
+
+        <div class="buttonRow">
+          <button id="saveNotionDestinationButton" class="secondary">Save Settings</button>
+          <button id="clearNotionTokenButton" class="secondary">Clear Token</button>
+        </div>
+
+        <div class="buttonRow triple">
+          <button id="validateWorkspacePlanButton" class="secondary">Validate</button>
+          <button id="planAcademicWorkspaceButton" class="secondary">Plan</button>
+          <button id="runNotionSyncButton" class="primary">Live Sync</button>
+        </div>
+
+        <section id="notionPlanSummary" class="notionSummary">
+          <p class="emptyState">No academic workspace plan yet.</p>
+        </section>
+      </section>
+
+      <section id="singleCourseControls" class="controls hidden">
+        <button id="scanButton" class="primary">Scan current course</button>
+      </section>
+
+      <section id="dashboardCourseSection" class="controls hidden">
+        <div class="sectionHeader">
+          <h2>Visible courses</h2>
+          <span id="detectedCourseCount" class="pill">0</span>
+        </div>
+        <div class="buttonRow">
+          <button id="scanSelectedCoursesButton" class="primary">Scan selected courses</button>
+          <button id="scanAllCoursesButton" class="secondary">Scan all visible courses</button>
+        </div>
+        <div class="buttonRow compact">
+          <button id="selectAllCoursesButton" class="secondary">Select all</button>
+          <button id="clearCourseSelectionButton" class="secondary">Clear</button>
+        </div>
+        <div id="courseListContainer" class="courseList">
+          <p class="emptyState">No visible dashboard courses detected yet.</p>
+        </div>
+      </section>
+
+      <section class="filters">
+        <label class="field">
+          <span>File type</span>
+          <select id="typeFilter">
+            <option value="all">All</option>
+            <option value="downloadable">Downloadable only</option>
+            <option value="canvas">Canvas-hosted</option>
+            <option value="external">External</option>
+            <option value="pdf">PDF</option>
+            <option value="word">Word</option>
+            <option value="spreadsheet">Spreadsheet</option>
+            <option value="slides">Slides</option>
+            <option value="text">Text</option>
+            <option value="archive">Archive</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="summary" id="summaryPanel">
+        <div class="summaryCard">
+          <span class="summaryLabel">Documents</span>
+          <strong id="documentCount">0</strong>
+        </div>
+        <div class="summaryCard">
+          <span class="summaryLabel">Duplicates removed</span>
+          <strong id="duplicateCount">0</strong>
+        </div>
+        <div class="summaryCard">
+          <span class="summaryLabel">Pages scanned</span>
+          <strong id="pagesScanned">0</strong>
+        </div>
+        <div class="summaryCard">
+          <span class="summaryLabel">Courses scanned</span>
+          <strong id="coursesScanned">0</strong>
+        </div>
+      </section>
+
+      <section class="controls extractionPanel">
+        <div class="sectionHeader">
+          <div>
+            <h2>Content Extraction</h2>
+            <p id="extractionStatusLine" class="status">Scan Canvas content, then run Phase 4 extraction.</p>
+          </div>
+          <span id="extractionReadyBadge" class="pill">0 ready</span>
+        </div>
+
+        <div class="miniSummaryGrid">
+          <article class="miniSummaryCard">
+            <span class="summaryLabel">Extracted</span>
+            <strong id="extractedDocumentCount">0</strong>
+            <p class="summaryMeta">Normalized text ready</p>
+          </article>
+          <article class="miniSummaryCard">
+            <span class="summaryLabel">Pending</span>
+            <strong id="pendingExtractionCount">0</strong>
+            <p class="summaryMeta">Queued or awaiting run</p>
+          </article>
+          <article class="miniSummaryCard">
+            <span class="summaryLabel">Failed</span>
+            <strong id="failedExtractionCount">0</strong>
+            <p class="summaryMeta">Needs safe retry</p>
+          </article>
+          <article class="miniSummaryCard">
+            <span class="summaryLabel">Unsupported</span>
+            <strong id="unsupportedExtractionCount">0</strong>
+            <p class="summaryMeta">Honest unsupported bucket</p>
+          </article>
+        </div>
+
+        <div class="infoStack">
+          <p id="extractionDetailLine" class="itemDetail">Chunked 0 · Notion enriched 0 · Automation ready 0</p>
+        </div>
+
+        <div class="buttonRow triple">
+          <button id="runExtractionButton" class="primary">Run Extraction</button>
+          <button id="retryExtractionButton" class="secondary">Retry Failed</button>
+          <button id="enrichNotionButton" class="secondary">Enrich Notion</button>
+        </div>
+      </section>
+
+      <section id="progressPanel" class="progress hidden"></section>
+
+      <section id="downloadActions" class="downloadActions">
+        <button id="selectVisibleButton" class="secondary">Select visible</button>
+        <button id="clearSelectionButton" class="secondary">Clear file selection</button>
+        <button id="downloadSelectedButton" class="primary">Download selected</button>
+        <button id="downloadAllButton" class="secondary">Download all scanned courses</button>
+      </section>
+
+      <section id="downloadSummary" class="downloadSummary hidden"></section>
+
+      <section id="resultsContainer" class="results">
+        <p class="emptyState">No scan results yet.</p>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

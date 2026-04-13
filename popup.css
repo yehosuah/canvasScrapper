@@ -1,0 +1,507 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --bg: #f5f1ea;
+  --panel: #fffaf3;
+  --line: #d7ccb8;
+  --ink: #1f1a14;
+  --muted: #665b4d;
+  --accent: #1d5f5a;
+  --accent-soft: #d9ece9;
+  --warn: #9d4c00;
+  --error: #7a2134;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 460px;
+  max-width: 460px;
+  background:
+    radial-gradient(circle at top right, rgba(29, 95, 90, 0.12), transparent 42%),
+    linear-gradient(180deg, #f8f3eb 0%, var(--bg) 100%);
+  color: var(--ink);
+}
+
+.popup {
+  padding: 16px;
+}
+
+.hero {
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.modeLine,
+.status,
+.courseItemMeta,
+.progressMeta,
+.progressMessage,
+.courseGroupMeta,
+.itemDetail,
+.summaryLabel,
+.downloadSummary,
+.field {
+  color: var(--muted);
+}
+
+.modeLine,
+.status {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.controls,
+.filters,
+.summary,
+.progress,
+.downloadActions,
+.downloadSummary,
+.results {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 8px 22px rgba(31, 26, 20, 0.05);
+}
+
+.controls,
+.filters,
+.summary,
+.progress,
+.downloadActions,
+.downloadSummary {
+  margin-bottom: 12px;
+}
+
+.sectionHeader,
+.groupHeader,
+.courseGroupHeader,
+.progressCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sectionHeader {
+  margin-bottom: 10px;
+}
+
+.buttonRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.buttonRow.compact {
+  margin-bottom: 10px;
+}
+
+button,
+select,
+input[type="text"],
+input[type="password"] {
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  padding: 10px 12px;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.secondary {
+  background: white;
+  color: var(--ink);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+select {
+  width: 100%;
+  background: white;
+  padding: 8px 10px;
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  background: white;
+  padding: 8px 10px;
+}
+
+.courseList,
+.progressGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.courseItem,
+.progressCard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(215, 204, 184, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.progressCard {
+  grid-template-columns: 1fr;
+}
+
+.courseItemTitle,
+.itemTitle {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.courseItemMeta,
+.progressMeta,
+.progressMessage,
+.courseGroupMeta,
+.itemDetail {
+  margin: 0;
+  font-size: 11px;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.summaryCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 10px;
+}
+
+.summaryLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.downloadActions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.results {
+  max-height: 460px;
+  overflow: auto;
+}
+
+.emptyState {
+  margin: 0;
+  font-size: 13px;
+}
+
+.courseGroup {
+  border-top: 1px solid rgba(215, 204, 184, 0.7);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.courseGroup:first-child {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.courseGroupHeader {
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.courseGroupActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nestedGroup {
+  border-top: 1px solid rgba(215, 204, 184, 0.45);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.groupHeader h3,
+.courseGroupHeader h2,
+.sectionHeader h2,
+.progressCardHeader h2 {
+  font-size: 14px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  background: white;
+}
+
+.statusPill {
+  text-transform: capitalize;
+}
+
+.status-queued {
+  background: #f7efe1;
+  color: var(--warn);
+}
+
+.status-scanning {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(29, 95, 90, 0.25);
+}
+
+.status-idle {
+  background: #f7efe1;
+  color: var(--muted);
+}
+
+.status-planned,
+.status-ready,
+.status-completed {
+  background: rgba(217, 236, 233, 0.75);
+  color: var(--accent);
+  border-color: rgba(29, 95, 90, 0.25);
+}
+
+.status-validating {
+  background: #efe7f9;
+  color: #5a3a7f;
+  border-color: rgba(90, 58, 127, 0.18);
+}
+
+.status-syncing,
+.status-partially_completed {
+  background: #f3ead6;
+  color: #7a5a18;
+  border-color: rgba(122, 90, 24, 0.18);
+}
+
+.status-blocked,
+.status-failed {
+  background: #f7e3e8;
+  color: var(--error);
+  border-color: rgba(122, 33, 52, 0.18);
+}
+
+.status-complete {
+  background: rgba(217, 236, 233, 0.75);
+  color: var(--accent);
+}
+
+.status-error {
+  background: #f7e3e8;
+  color: var(--error);
+  border-color: rgba(122, 33, 52, 0.18);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(215, 204, 184, 0.45);
+}
+
+.item:first-child {
+  border-top: 0;
+}
+
+.itemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.item input[type="checkbox"],
+.courseItem input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.badgeCanvas {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(29, 95, 90, 0.25);
+}
+
+.badgeExternal {
+  background: #f3e3cf;
+  color: var(--warn);
+  border-color: rgba(157, 76, 0, 0.2);
+}
+
+.notionPanel {
+  padding-bottom: 10px;
+}
+
+.fieldHint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.notionDetails {
+  margin-top: 10px;
+}
+
+.notionDetails summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.toggleField,
+.choiceChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggleField {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.radioRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.choiceChip {
+  padding: 9px 10px;
+  border: 1px solid rgba(215, 204, 184, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  min-height: 48px;
+}
+
+.notionFieldGrid,
+.infoStack,
+.miniSummaryGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.notionFieldGrid {
+  margin-bottom: 10px;
+}
+
+.infoStack {
+  margin-bottom: 10px;
+}
+
+.infoStack .itemDetail {
+  margin: 0;
+}
+
+.buttonRow.triple {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.notionSummary {
+  margin-top: 10px;
+  border: 1px solid rgba(215, 204, 184, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 10px;
+}
+
+.miniSummaryGrid {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 8px;
+}
+
+.miniSummaryCard {
+  border: 1px solid rgba(215, 204, 184, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 10px;
+}
+
+.miniSummaryCard strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.summaryMeta {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.summaryBlocked {
+  color: var(--error);
+}
+
+.hidden {
+  display: none;
+}

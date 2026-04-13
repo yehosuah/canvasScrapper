@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Canvas Academic Ingestor",
+  "version": "1.1.0",
+  "description": "Scan Canvas courses, download artifacts locally, and ingest structured academic content into Notion.",
+  "action": {
+    "default_title": "Canvas Academic Ingestor",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "downloads",
+    "offscreen",
+    "permissions",
+    "scripting",
+    "storage",
+    "tabs",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://*.canvaslms.com/*",
+    "https://*.instructure.com/*",
+    "https://api.notion.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}
