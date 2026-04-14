@@ -259,6 +259,13 @@
     return normalized;
   }
 
+  async function clearNotionMappings() {
+    await chrome.storage.local.set({
+      [KEYS.mappings]: Models.DEFAULT_NOTION_MAPPINGS
+    });
+    return Models.DEFAULT_NOTION_MAPPINGS;
+  }
+
   async function clearPlannerArtifacts() {
     await chrome.storage.local.set({
       [KEYS.plan]: null,
@@ -270,6 +277,7 @@
 
   globalThis.CanvasNotionStorage = {
     clearNotionAutomationContract,
+    clearNotionMappings,
     clearNotionPlannerSummary,
     clearNotionWorkspacePlan,
     clearPlannerArtifacts,

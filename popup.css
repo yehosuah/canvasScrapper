@@ -167,6 +167,12 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.fieldGridInline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 select {
   width: 100%;
   background: white;
@@ -174,20 +180,23 @@ select {
 }
 
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+input[type="date"] {
   width: 100%;
   background: white;
   padding: 8px 10px;
 }
 
 .courseList,
-.progressGrid {
+.progressGrid,
+.automationList {
   display: grid;
   gap: 8px;
 }
 
 .courseItem,
-.progressCard {
+.progressCard,
+.automationOption {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 10px;
@@ -199,6 +208,21 @@ input[type="password"] {
 
 .progressCard {
   grid-template-columns: 1fr;
+}
+
+.automationOption {
+  cursor: pointer;
+}
+
+.automationOption.isSelected {
+  border-color: rgba(29, 95, 90, 0.45);
+  background: rgba(217, 236, 233, 0.5);
+}
+
+.automationOptionTitle {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .courseItemTitle,

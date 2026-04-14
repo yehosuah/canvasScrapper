@@ -65,17 +65,20 @@
         courses: null,
         content: null,
         deliverables: null,
-        studyAssets: null
+        studyAssets: null,
+        automationOutputs: null
       },
       courseHubs: {},
       updatedAt: null
     },
     courseEntries: {},
     contentEntries: {},
-    deliverableEntries: {}
+    deliverableEntries: {},
+    automationEntries: {}
   };
 
   const DEFAULT_NOTION_DESTINATION = {
+    destinationInput: "",
     destinationUrl: "",
     destinationPageId: "",
     workspaceMode: "general",
@@ -147,7 +150,7 @@
     ].join("-");
   }
 
-  function normalizeNotionId(value) {
+  function extractNotionUuid(value) {
     const raw = trimString(value);
     if (!raw) {
       return "";
@@ -157,10 +160,21 @@
     const uuidMatch = decoded.match(
       /[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
     );
-    if (uuidMatch) {
-      return formatUuid(uuidMatch[0]);
+    return uuidMatch ? formatUuid(uuidMatch[0]) : "";
+  }
+
+  function normalizeNotionId(value) {
+    const raw = trimString(value);
+    if (!raw) {
+      return "";
     }
 
+    const strictUuid = extractNotionUuid(raw);
+    if (strictUuid) {
+      return strictUuid;
+    }
+
+    const decoded = safeDecode(raw);
     const withoutQuery = decoded.split("?")[0].split("#")[0].replace(/\/$/, "");
     const segments = withoutQuery.split("/").filter(Boolean);
     return trimString(segments[segments.length - 1] || withoutQuery);
@@ -233,14 +247,16 @@
           courses: source.workspace?.databases?.courses || null,
           content: source.workspace?.databases?.content || null,
           deliverables: source.workspace?.databases?.deliverables || null,
-          studyAssets: source.workspace?.databases?.studyAssets || null
+          studyAssets: source.workspace?.databases?.studyAssets || null,
+          automationOutputs: source.workspace?.databases?.automationOutputs || null
         },
         courseHubs: source.workspace?.courseHubs || {},
         updatedAt: trimString(source.workspace?.updatedAt) || null
       },
       courseEntries: source.courseEntries || {},
       contentEntries: source.contentEntries || {},
-      deliverableEntries: source.deliverableEntries || {}
+      deliverableEntries: source.deliverableEntries || {},
+      automationEntries: source.automationEntries || {}
     };
   }
 
@@ -299,6 +315,7 @@
     createNotionPlannerJob,
     createNotionSyncResult,
     createPlannerSummary,
+    extractNotionUuid,
     formatUuid,
     getLatestJob,
     normalizeEnum,

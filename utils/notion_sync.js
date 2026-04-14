@@ -111,6 +111,7 @@
   }
 
   function getOverviewStatus(storageState, latestJob) {
+    const destinationInput = storageState.notionDestination.destinationInput || storageState.notionDestination.destinationUrl;
     if (latestJob?.status === "blocked" || storageState.notionLastValidation?.status === "blocked") {
       return {
         state: "blocked",
@@ -118,17 +119,14 @@
       };
     }
 
-    if (!storageState.notionDestination.destinationUrl) {
+    if (!destinationInput) {
       return {
         state: "destination_missing",
         label: "Destination needed"
       };
     }
 
-    if (
-      !Destination.isValidNotionUrl(storageState.notionDestination.destinationUrl) ||
-      !storageState.notionDestination.destinationPageId
-    ) {
+    if (!Destination.isValidDestinationInput(destinationInput) || !storageState.notionDestination.destinationPageId) {
       return {
         state: "blocked",
         label: "Destination invalid"
@@ -152,26 +150,28 @@
     if (!auth?.hasToken) {
       return "Token missing";
     }
+    const tokenPreview = auth.tokenPreview || "saved token";
     if (auth.status === "connected") {
-      return `Connected${auth.botName ? ` · ${auth.botName}` : ""}`;
+      return `Connected · ${tokenPreview}${auth.botName ? ` · ${auth.botName}` : ""}`;
     }
     if (auth.lastError) {
-      return `Token invalid · ${auth.lastError}`;
+      return `Token invalid · ${tokenPreview} · ${auth.lastError}`;
     }
-    return `Token saved · ${auth.tokenPreview || "manual token"}`;
+    return `Token saved · ${tokenPreview}`;
   }
 
   function buildReadinessMessage(storageState, manifestSummary, latestJob) {
-    if (!storageState.notionDestination.destinationUrl) {
-      return "Paste destination Notion page URL, choose workspace mode, then plan academic workspace.";
+    const destinationInput = storageState.notionDestination.destinationInput || storageState.notionDestination.destinationUrl;
+    if (!destinationInput) {
+      return "Paste destination Notion page URL or page ID, choose workspace mode, then plan academic workspace.";
     }
 
-    if (!Destination.isValidNotionUrl(storageState.notionDestination.destinationUrl)) {
-      return "Destination must be a valid Notion page URL.";
+    if (!Destination.isValidDestinationInput(destinationInput)) {
+      return "Destination must be a valid Notion page URL or raw page ID.";
     }
 
     if (!storageState.notionDestination.destinationPageId) {
-      return "Destination URL saved, but page ID is not parseable yet.";
+      return "Destination saved, but page ID is not parseable yet.";
     }
 
     if (!manifestSummary.courses && !manifestSummary.documents) {
@@ -357,13 +357,11 @@
 
     const destinationChanged =
       JSON.stringify({
-        destinationUrl: currentDestination.destinationUrl,
         destinationPageId: currentDestination.destinationPageId,
         workspaceMode: currentDestination.workspaceMode,
         targetCourseId: currentDestination.targetCourseId
       }) !==
       JSON.stringify({
-        destinationUrl: nextDestination.destinationUrl,
         destinationPageId: nextDestination.destinationPageId,
         workspaceMode: nextDestination.workspaceMode,
         targetCourseId: nextDestination.targetCourseId
@@ -377,6 +375,7 @@
     await Storage.setNotionLastValidation(null);
     if (destinationChanged) {
       await Storage.clearPlannerArtifacts();
+      await Storage.clearNotionMappings();
     }
 
     return getOverview();
@@ -421,7 +420,9 @@
 
     await Storage.setNotionDestination({
       ...preview.destination,
-      validatedLocally: Boolean(preview.destination.destinationUrl && preview.destination.destinationPageId)
+      validatedLocally: Boolean(
+        preview.destination.destinationPageId && Destination.isValidDestinationInput(preview.destination.destinationInput)
+      )
     });
     await persistManifestPlannerMetadata(preview.manifest, preview.destination);
     await Storage.setNotionLastValidation(validation);

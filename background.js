@@ -19,7 +19,14 @@ importScripts(
   "utils/notion_auth.js",
   "utils/notion_validate.js",
   "utils/notion_workspace.js",
-  "utils/notion_sync.js"
+  "utils/notion_sync.js",
+  "utils/automation_models.js",
+  "utils/automation_storage.js",
+  "utils/automation_llm_adapter.js",
+  "utils/automation_collect.js",
+  "utils/automation_generate.js",
+  "utils/automation_writer.js",
+  "utils/automation_runs.js"
 );
 
 const UrlUtils = globalThis.CanvasUrlUtils;
@@ -33,6 +40,8 @@ const DedupeUtils = globalThis.CanvasDedupeUtils;
 const RecordUtils = globalThis.CanvasRecordUtils;
 const NotionStorage = globalThis.CanvasNotionStorage;
 const NotionSync = globalThis.CanvasNotionSync;
+const AutomationStorage = globalThis.CanvasAutomationStorage;
+const AutomationRuns = globalThis.CanvasAutomationRuns;
 
 const STORAGE_KEY = "canvasCourseScanState";
 const EXTRACTION_KEY = "canvasContentExtractionState";
@@ -92,6 +101,7 @@ let activeScanPromise = null;
 let activeExtractionPromise = null;
 
 NotionStorage.ensureStorageShape().catch(() => {});
+AutomationStorage.ensureStorageShape().catch(() => {});
 
 function nowIso() {
   return new Date().toISOString();
@@ -237,14 +247,214 @@ async function runOffscreenExtraction(message) {
 }
 
 async function fetchSourceResponse(url) {
+  await ensureExternalFetchPermission(url);
   const response = await fetch(url, {
-    credentials: "include",
+    ...buildFetchOptions(url),
     redirect: "follow"
   });
   if (!response.ok) {
     throw new Error(`Request failed with ${response.status} ${response.statusText}`);
   }
   return response;
+}
+
+function isHtmlContentType(contentType) {
+  return /text\/html|application\/xhtml\+xml/i.test(contentType || "");
+}
+
+function isCanvasHostedUrl(sourceUrl) {
+  if (!sourceUrl) {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(sourceUrl).hostname.toLowerCase();
+    return UrlUtils.isLikelyCanvasHost(hostname) || hostname.endsWith(".canvas-user-content.com");
+  } catch (error) {
+    return false;
+  }
+}
+
+function buildFetchOptions(sourceUrl) {
+  return {
+    credentials: isCanvasHostedUrl(sourceUrl) ? "include" : "omit"
+  };
+}
+
+async function ensureExternalFetchPermission(sourceUrl) {
+  if (!sourceUrl || isCanvasHostedUrl(sourceUrl)) {
+    return;
+  }
+
+  let originPattern = "";
+  try {
+    const url = new URL(sourceUrl);
+    if (!/^https?:$/i.test(url.protocol)) {
+      return;
+    }
+    originPattern = `${url.origin}/*`;
+  } catch (error) {
+    return;
+  }
+
+  const hasPermission = await chrome.permissions.contains({
+    origins: [originPattern]
+  });
+  if (hasPermission) {
+    return;
+  }
+
+  throw new Error("Grant optional site access before extracting external resources from this host.");
+}
+
+function shouldUseTabFetch(sourceUrl) {
+  if (!sourceUrl) {
+    return false;
+  }
+
+  try {
+    const url = new URL(sourceUrl);
+    return isCanvasHostedUrl(sourceUrl) || url.pathname.includes("/courses/");
+  } catch (error) {
+    return false;
+  }
+}
+
+async function findBestExtractionTab(record, sourceUrl) {
+  const activeTab = await getActiveTab();
+  const allTabs = await chrome.tabs.query({});
+  const candidates = allTabs.filter((tab) => /^https?:/i.test(tab.url || ""));
+  if (!candidates.length) {
+    return null;
+  }
+
+  let sourceOrigin = "";
+  let sourceCourseId = "";
+  const sourcePageUrl = record?.sourcePageUrl || record?.sourceCanvasUrl || sourceUrl || "";
+  try {
+    sourceOrigin = new URL(sourcePageUrl || sourceUrl).origin;
+  } catch (error) {}
+  sourceCourseId =
+    UrlUtils.extractCourseId(sourcePageUrl || "") ||
+    UrlUtils.extractCourseId(record?.sourceCanvasUrl || "") ||
+    UrlUtils.extractCourseId(sourceUrl || "") ||
+    "";
+
+  const scored = candidates
+    .map((tab) => {
+      let score = 0;
+      let tabOrigin = "";
+      try {
+        tabOrigin = new URL(tab.url).origin;
+      } catch (error) {}
+
+      if (activeTab?.id && tab.id === activeTab.id) {
+        score += 1;
+      }
+      if (sourceOrigin && tabOrigin === sourceOrigin) {
+        score += 5;
+      }
+      if (sourceCourseId && UrlUtils.extractCourseId(tab.url || "") === sourceCourseId) {
+        score += 4;
+      }
+      if (sourceOrigin && tabOrigin && UrlUtils.isLikelyCanvasHost(new URL(tab.url).hostname)) {
+        score += 2;
+      }
+      if (isCanvasHostedUrl(sourceUrl) && /^https:\/\/[^/]*\.instructure\.com\//i.test(tab.url || "")) {
+        score += 2;
+      }
+      return { tab, score };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0]?.score > 0 ? scored[0].tab : null;
+}
+
+async function fetchResourceForExtractionFromTab(record, sourceUrl, descriptor) {
+  const tab = await findBestExtractionTab(record, sourceUrl);
+  if (!tab?.id) {
+    throw new Error("Open the Canvas tab before extracting protected course files.");
+  }
+
+  await ensureContentScript(tab.id);
+  const response = await sendTabMessage(tab.id, {
+    type: "FETCH_RESOURCE_FOR_EXTRACTION",
+    url: sourceUrl,
+    mode: descriptor.fetchMode,
+    credentials: buildFetchOptions(sourceUrl).credentials
+  });
+  if (!response?.ok) {
+    throw new Error(response?.error || "Canvas tab fetch failed.");
+  }
+  return response;
+}
+
+function validateFetchedPayload(payload, descriptor) {
+  const contentType = payload?.contentType || "";
+  const text = typeof payload?.text === "string" ? payload.text : "";
+
+  if (["pdf", "docx"].includes(descriptor.sourceCategory) && isHtmlContentType(contentType)) {
+    if (UrlUtils.looksLikeJavascriptGateText(text)) {
+      throw new Error("Canvas returned a JavaScript gate page instead of the file bytes.");
+    }
+    throw new Error(`Expected ${descriptor.sourceCategory.toUpperCase()} source, but fetch returned HTML.`);
+  }
+
+  if (["fetch_html", "fetch_text"].includes(descriptor.fetchMode) && UrlUtils.looksLikeJavascriptGateText(text)) {
+    throw new Error("Canvas returned a JavaScript gate page instead of extractable content.");
+  }
+
+  return payload;
+}
+
+async function fetchExtractionPayload(sourceUrl, descriptor, record) {
+  const preferTabFetch = shouldUseTabFetch(sourceUrl);
+  let tabError = null;
+
+  if (preferTabFetch) {
+    try {
+      return validateFetchedPayload(await fetchResourceForExtractionFromTab(record, sourceUrl, descriptor), descriptor);
+    } catch (error) {
+      tabError = error;
+    }
+  }
+
+  try {
+    const response = await fetchSourceResponse(sourceUrl);
+    const contentType = response.headers.get("content-type") || "";
+    if (descriptor.fetchMode === "fetch_binary") {
+      if (isHtmlContentType(contentType)) {
+        return validateFetchedPayload(
+          {
+            url: response.url || sourceUrl,
+            contentType,
+            text: await response.text()
+          },
+          descriptor
+        );
+      }
+
+      return validateFetchedPayload(
+        {
+          url: response.url || sourceUrl,
+          contentType,
+          buffer: await response.arrayBuffer()
+        },
+        descriptor
+      );
+    }
+
+    return validateFetchedPayload(
+      {
+        url: response.url || sourceUrl,
+        contentType,
+        text: await response.text()
+      },
+      descriptor
+    );
+  } catch (error) {
+    throw tabError || error;
+  }
 }
 
 async function extractContentForRecord(record, descriptor) {
@@ -264,28 +474,21 @@ async function extractContentForRecord(record, descriptor) {
     });
   }
 
-  const response = await fetchSourceResponse(sourceUrl);
-  const contentType = response.headers.get("content-type") || "";
-  if (
-    ["pdf", "docx"].includes(descriptor.sourceCategory) &&
-    /text\/html|application\/xhtml\+xml/i.test(contentType)
-  ) {
-    throw new Error(`Expected ${descriptor.sourceCategory.toUpperCase()} source, but fetch returned HTML.`);
-  }
+  const payload = await fetchExtractionPayload(sourceUrl, descriptor, record);
 
   if (descriptor.fetchMode === "fetch_html") {
     return runOffscreenExtraction({
       type: "OFFSCREEN_EXTRACT_CONTENT",
       sourceCategory: "canvas_native_html",
       extractionMethod: descriptor.extractionMethod,
-      html: await response.text(),
+      html: payload.text || "",
       title: record.sourcePageTitle || record.fileName || "",
       fallbackText: record.bodyText || record.excerpt || ""
     });
   }
 
   if (descriptor.fetchMode === "fetch_text") {
-    const text = await response.text();
+    const text = payload.text || "";
     return runOffscreenExtraction({
       type: "OFFSCREEN_EXTRACT_CONTENT",
       sourceCategory: descriptor.sourceCategory,
@@ -301,7 +504,7 @@ async function extractContentForRecord(record, descriptor) {
       type: "OFFSCREEN_EXTRACT_CONTENT",
       sourceCategory: descriptor.sourceCategory,
       extractionMethod: descriptor.extractionMethod,
-      buffer: await response.arrayBuffer(),
+      buffer: payload.buffer,
       title: record.sourcePageTitle || record.fileName || "",
       fileName: record.fileName || ""
     });
@@ -372,7 +575,12 @@ async function processNextExtractionJob() {
 
   const record = getCurrentManifestRecords().find((item) => item.contentObjectId === job.contentObjectId);
   if (!record) {
-    inMemoryExtractionState = ExtractionQueueUtils.failJob(inMemoryExtractionState, job.jobId, "Source record missing from current manifest.");
+    inMemoryExtractionState = ExtractionQueueUtils.markUnsupported(
+      inMemoryExtractionState,
+      job.contentObjectId,
+      "Source record no longer participates in extraction.",
+      job.trigger
+    );
     await persistExtractionState(inMemoryExtractionState);
     return true;
   }
@@ -446,6 +654,16 @@ async function enqueueManifestExtractions(options) {
   inMemoryExtractionState = queueResult.state;
   await persistExtractionState(inMemoryExtractionState);
   return queueResult;
+}
+
+function getQueuedExtractionRecords(records = getCurrentManifestRecords()) {
+  const queuedIds = new Set(
+    (inMemoryExtractionState.queue || [])
+      .filter((job) => job.status === "queued" || job.status === "processing")
+      .map((job) => job.contentObjectId)
+  );
+
+  return (records || []).filter((record) => queuedIds.has(record.contentObjectId));
 }
 
 async function applyNotionEnrichmentState(execution) {
@@ -622,6 +840,54 @@ async function maybeRequestOriginPermission(origin) {
   try {
     return await chrome.permissions.request({
       origins: [originPattern]
+    });
+  } catch (error) {
+    return false;
+  }
+}
+
+async function maybeRequestExternalExtractionPermissions(records) {
+  const items = Array.isArray(records) ? records : [];
+  const needsHttps = items.some((record) => {
+    try {
+      const sourceUrl = record?.sourceCanvasUrl || record?.externalUrl || record?.sourcePageUrl || "";
+      const url = new URL(sourceUrl);
+      return url.protocol === "https:" && !isCanvasHostedUrl(sourceUrl);
+    } catch (error) {
+      return false;
+    }
+  });
+  const needsHttp = items.some((record) => {
+    try {
+      const sourceUrl = record?.sourceCanvasUrl || record?.externalUrl || record?.sourcePageUrl || "";
+      const url = new URL(sourceUrl);
+      return url.protocol === "http:" && !isCanvasHostedUrl(sourceUrl);
+    } catch (error) {
+      return false;
+    }
+  });
+
+  const requestedOrigins = [];
+  if (needsHttps) {
+    requestedOrigins.push("https://*/*");
+  }
+  if (needsHttp) {
+    requestedOrigins.push("http://*/*");
+  }
+  if (!requestedOrigins.length) {
+    return true;
+  }
+
+  const alreadyGranted = await chrome.permissions.contains({
+    origins: requestedOrigins
+  });
+  if (alreadyGranted) {
+    return true;
+  }
+
+  try {
+    return await chrome.permissions.request({
+      origins: requestedOrigins
     });
   } catch (error) {
     return false;
@@ -1343,6 +1609,7 @@ async function downloadDocuments(options) {
 chrome.runtime.onInstalled.addListener(() => {
   resetState(DEFAULT_SCAN_STATE, DEFAULT_EXTRACTION_STATE).catch(() => {});
   NotionStorage.ensureStorageShape().catch(() => {});
+  AutomationStorage.ensureStorageShape().catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -1376,6 +1643,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({
         ok: true,
         notion: await NotionSync.getOverview()
+      });
+      return;
+    }
+
+    if (message.type === "GET_AUTOMATION_STATE") {
+      sendResponse({
+        ok: true,
+        automation: await AutomationRuns.getOverview()
       });
       return;
     }
@@ -1463,6 +1738,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === "ENRICH_NOTION_WITH_EXTRACTED_CONTENT") {
+      let summary = inMemoryState.extractionSummary || ExtractionQueueUtils.buildSummary(getCurrentManifestRecords(), inMemoryExtractionState);
+      let permissionWarning = "";
+      if ((summary.pending || 0) > 0 && !(summary.extracted || summary.chunked || summary.automationReady)) {
+        const externalPermissionGranted = await maybeRequestExternalExtractionPermissions(getQueuedExtractionRecords());
+        if (!externalPermissionGranted) {
+          permissionWarning = "External site access not granted. External files may fail extraction.";
+          logExtractionEvent("warn", permissionWarning);
+        }
+        summary = await processExtractionQueue();
+      }
+
+      if (!(summary.extracted || summary.chunked || summary.automationReady)) {
+        sendResponse({
+          ok: false,
+          notion: await NotionSync.getOverview(),
+          error: permissionWarning || "Run extraction first. No extracted content is ready for Notion enrichment yet."
+        });
+        return;
+      }
+
       const result = await NotionSync.runLiveSync({
         destination: message.destination || null
       });
@@ -1472,7 +1767,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         job: result.job,
         notion: result.overview,
         result: result.result,
+        warning: permissionWarning || null,
         error: result.ok ? null : result.result?.blockedReason || result.job?.summary || "Notion enrichment failed."
+      });
+      return;
+    }
+
+    if (message.type === "RUN_AUTOMATION") {
+      const result = await AutomationRuns.runAutomation({
+        automationId: message.automationId,
+        windowPreset: message.windowPreset,
+        customStartDate: message.customStartDate,
+        customEndDate: message.customEndDate,
+        targetCourseId: message.targetCourseId
+      });
+      sendResponse({
+        ok: result.ok,
+        run: result.run || null,
+        summary: result.summary || null,
+        outputs: result.outputs || [],
+        automation: result.automation || (await AutomationRuns.getOverview()),
+        error: result.ok ? null : result.error || "Automation run failed."
       });
       return;
     }
@@ -1582,11 +1897,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const queueResult = await enqueueManifestExtractions({
         trigger: "manual_run"
       });
+      const externalPermissionGranted = await maybeRequestExternalExtractionPermissions(getQueuedExtractionRecords());
+      if (!externalPermissionGranted) {
+        logExtractionEvent("warn", "External site access not granted. External files may fail extraction.");
+      }
       const summary = await processExtractionQueue();
       sendResponse({
         ok: true,
         queueResult,
         summary,
+        warning: externalPermissionGranted ? null : "External site access not granted. External files may fail extraction.",
         state: inMemoryState
       });
       return;
@@ -1599,11 +1919,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         records: failedRecords,
         force: true
       });
+      const externalPermissionGranted = await maybeRequestExternalExtractionPermissions(getQueuedExtractionRecords());
+      if (!externalPermissionGranted) {
+        logExtractionEvent("warn", "External site access not granted. External files may fail extraction.");
+      }
       const summary = await processExtractionQueue();
       sendResponse({
         ok: true,
         queueResult,
         summary,
+        warning: externalPermissionGranted ? null : "External site access not granted. External files may fail extraction.",
         state: inMemoryState
       });
       return;

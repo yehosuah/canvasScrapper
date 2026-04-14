@@ -468,6 +468,14 @@
       .trim();
   }
 
+  function sanitizePageTitle(value, fallback) {
+    const normalized = collapseWhitespace(value);
+    if (!normalized || UrlUtils.looksLikeJavascriptGateText(normalized)) {
+      return collapseWhitespace(fallback);
+    }
+    return normalized;
+  }
+
   function collectReadableLines(node, lines) {
     if (!node) {
       return;
@@ -573,10 +581,13 @@
       return null;
     }
 
-    const pageTitle = extractPageTitle(doc);
+    const pageTitle = sanitizePageTitle(extractPageTitle(doc));
     const root = pruneContentRoot(findContentRoot(doc, context.sourceSection));
     const bodyText = contentNodeToText(root);
     const bodyHtml = normalizeContentHtml(root);
+    if (UrlUtils.looksLikeJavascriptGateText(bodyText) && UrlUtils.isCanvasFilePreviewUrl(context.pageUrl, context.origin)) {
+      return null;
+    }
     if (!bodyText && !bodyHtml) {
       return null;
     }
@@ -794,7 +805,7 @@
       courseId: context.courseId,
       courseName: context.courseName || undefined,
       sourceSection: context.sourceSection,
-      sourcePageTitle: pageTitle || undefined,
+      sourcePageTitle: sanitizePageTitle(pageTitle, finalFileName || linkText) || undefined,
       sourcePageUrl: context.pageUrl,
       linkText: linkText || undefined,
       fileName: finalFileName || undefined,
@@ -866,7 +877,7 @@
     }
 
     if (pageMode === "modules") {
-      return ["pages", "assignments", "files"].includes(section) || absoluteUrl.includes("/modules/items/");
+      return ["pages", "assignments"].includes(section) || absoluteUrl.includes("/modules/items/");
     }
     if (pageMode === "pages") {
       return section === "pages" && !absoluteUrl.endsWith(`/courses/${context.courseId}/pages`);
@@ -875,7 +886,7 @@
       return section === "assignments" && !absoluteUrl.endsWith(`/courses/${context.courseId}/assignments`);
     }
     if (pageMode === "home" || pageMode === "syllabus") {
-      return ["pages", "assignments", "files"].includes(section);
+      return ["pages", "assignments"].includes(section);
     }
 
     return false;

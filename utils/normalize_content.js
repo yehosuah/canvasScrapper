@@ -43,6 +43,12 @@
     "table",
     "ul"
   ]);
+  const JAVASCRIPT_GATE_TEXT_SNIPPETS = [
+    "debe tener activado javascript para poder acceder a este sitio",
+    "you need to enable javascript to run this app",
+    "you need to enable javascript to access this site",
+    "javascript is required to access this site"
+  ];
 
   function trimString(value) {
     return String(value || "").trim();
@@ -75,6 +81,15 @@
   function countWords(text) {
     const matches = normalizePlainTextValue(text).match(/\S+/g);
     return matches ? matches.length : 0;
+  }
+
+  function looksLikeJavascriptGateText(text) {
+    const normalized = normalizePlainTextValue(text).toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+
+    return countWords(normalized) <= 40 && JAVASCRIPT_GATE_TEXT_SNIPPETS.some((snippet) => normalized.includes(snippet));
   }
 
   function splitParagraphs(text) {
@@ -149,6 +164,19 @@
     const filteredBlocks = (blocks || []).filter((block) => trimString(block?.text));
     const extractedHtml = serializeBlocksToHtml(filteredBlocks);
     const extractedText = serializeBlocksToText(filteredBlocks);
+    if (looksLikeJavascriptGateText(extractedText)) {
+      return {
+        extractedText: "",
+        extractedHtml: "",
+        headingCount: 0,
+        headings: [],
+        paragraphCount: 0,
+        charCount: 0,
+        wordCount: 0,
+        semanticBlocks: [],
+        extractedAt: trimString(options?.extractedAt) || new Date().toISOString()
+      };
+    }
     const headings = filteredBlocks.filter((block) => block.type === "heading").map((block) => block.text);
     return {
       extractedText,

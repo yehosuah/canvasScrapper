@@ -25,6 +25,7 @@ const MODE_LABELS = {
   dashboard: "Dashboard or all courses page",
   unsupported: "Unsupported page"
 };
+const UrlUtils = globalThis.CanvasUrlUtils || null;
 
 const elements = {
   courseName: document.getElementById("courseName"),
@@ -79,15 +80,29 @@ const elements = {
   validateWorkspacePlanButton: document.getElementById("validateWorkspacePlanButton"),
   planAcademicWorkspaceButton: document.getElementById("planAcademicWorkspaceButton"),
   runNotionSyncButton: document.getElementById("runNotionSyncButton"),
-  notionPlanSummary: document.getElementById("notionPlanSummary")
+  notionPlanSummary: document.getElementById("notionPlanSummary"),
+  automationStatusLine: document.getElementById("automationStatusLine"),
+  automationReadinessBadge: document.getElementById("automationReadinessBadge"),
+  automationListContainer: document.getElementById("automationListContainer"),
+  automationWindowPreset: document.getElementById("automationWindowPreset"),
+  automationCustomRangeFields: document.getElementById("automationCustomRangeFields"),
+  automationStartDate: document.getElementById("automationStartDate"),
+  automationEndDate: document.getElementById("automationEndDate"),
+  automationCourseField: document.getElementById("automationCourseField"),
+  automationCourseSelect: document.getElementById("automationCourseSelect"),
+  runAutomationButton: document.getElementById("runAutomationButton"),
+  automationLatestSummary: document.getElementById("automationLatestSummary")
 };
 
 let currentState = null;
 let activeDetection = null;
 let notionState = null;
+let automationState = null;
 let notionBusy = false;
 let extractionBusy = false;
-let notionActionMessage = "Waiting for token and destination.";
+let automationBusy = false;
+let selectedAutomationId = "weekly_tasks_overview";
+let notionActionMessage = "Waiting for token and destination page URL or ID.";
 let notionDraft = {
   accessTokenDirty: false,
   destinationDirty: false,
@@ -175,7 +190,8 @@ function applyNotionDestinationToForm(destination) {
     : nextDestination.targetCourseId || elements.notionTargetCourseId.value;
 
   if (!notionDraft.destinationDirty && document.activeElement !== elements.notionDestinationUrl) {
-    elements.notionDestinationUrl.value = nextDestination.destinationUrl || "";
+    elements.notionDestinationUrl.value =
+      nextDestination.destinationInput || nextDestination.destinationUrl || nextDestination.destinationPageId || "";
   }
   if (!notionDraft.workspaceModeDirty) {
     elements.notionWorkspaceModeGeneral.checked = (nextDestination.workspaceMode || "general") === "general";
@@ -226,7 +242,7 @@ function populateTargetCourseOptions(selectedCourseId) {
 function getNotionDestinationFromForm() {
   const workspaceMode = getWorkspaceModeFromForm();
   return {
-    destinationUrl: elements.notionDestinationUrl.value.trim(),
+    destinationInput: elements.notionDestinationUrl.value.trim(),
     workspaceMode,
     targetCourseId: workspaceMode === "class_specific" ? elements.notionTargetCourseId.value.trim() : ""
   };
@@ -284,6 +300,80 @@ function setExtractionBusy(isBusy) {
   elements.enrichNotionButton.disabled = isBusy;
 }
 
+function setAutomationBusy(isBusy) {
+  automationBusy = isBusy;
+  elements.runAutomationButton.disabled = isBusy;
+  elements.automationWindowPreset.disabled = isBusy;
+  elements.automationStartDate.disabled = isBusy;
+  elements.automationEndDate.disabled = isBusy;
+  elements.automationCourseSelect.disabled = isBusy;
+}
+
+function getSelectedAutomationDefinition() {
+  return automationState?.definitions?.find((definition) => definition.automationId === selectedAutomationId) || null;
+}
+
+function getAutomationLatestEntry(automationId) {
+  return automationState?.latestByAutomationId?.[automationId] || null;
+}
+
+function getAutomationAvailability(automationId) {
+  return automationState?.availabilityByAutomationId?.[automationId] || null;
+}
+
+function getAutomationCourseOptions() {
+  const seen = new Map();
+  for (const option of automationState?.courseOptions || []) {
+    if (option?.courseId) {
+      seen.set(option.courseId, {
+        courseId: option.courseId,
+        courseName: option.courseName || option.courseId
+      });
+    }
+  }
+  for (const course of notionState?.plan?.coursePlans || []) {
+    if (course?.relatedCourseId && !seen.has(course.relatedCourseId)) {
+      seen.set(course.relatedCourseId, {
+        courseId: course.relatedCourseId,
+        courseName: String(course.title || course.name || course.relatedCourseId).replace(/\s+Hub$/i, "")
+      });
+    }
+  }
+  for (const course of currentState?.courses || []) {
+    if (course?.courseId && !seen.has(course.courseId)) {
+      seen.set(course.courseId, {
+        courseId: course.courseId,
+        courseName: course.courseName || course.courseId
+      });
+    }
+  }
+  return Array.from(seen.values()).sort((left, right) => left.courseName.localeCompare(right.courseName));
+}
+
+function syncAutomationControlsVisibility() {
+  const definition = getSelectedAutomationDefinition();
+  const showCustomRange = elements.automationWindowPreset.value === "custom";
+  const showCourseField = definition?.targetScope === "course";
+  elements.automationCustomRangeFields.classList.toggle("hidden", !showCustomRange);
+  elements.automationCourseField.classList.toggle("hidden", !showCourseField);
+}
+
+function getAutomationBadgeClass(state) {
+  if (state === "blocked" || state === "failed") {
+    return "status-blocked";
+  }
+  if (state === "completed") {
+    return "status-ready";
+  }
+  if (state === "planning" || state === "collecting" || state === "generating" || state === "writing") {
+    return "status-scanning";
+  }
+  if (state === "ready") {
+    return "status-ready";
+  }
+  return "status-idle";
+}
+
 function buildWarningMarkup(warnings) {
   return (warnings || [])
     .filter(Boolean)
@@ -313,8 +403,12 @@ function renderNotionSummary() {
   elements.notionStatusLine.textContent = notionState.readinessMessage || "Save settings, validate, then plan or sync.";
   elements.notionAuthLine.textContent = `Auth: ${notionState.authStateLabel || "Token missing"}`;
   elements.notionActionLine.textContent = `Action: ${notionActionMessage}`;
-  elements.notionDestinationLine.textContent = notionState.destination?.destinationUrl
-    ? `Destination: ${notionState.destination.destinationPageId || "unparsed"} · ${notionState.destination.workspaceMode === "class_specific" ? "Class-specific workspace" : "General academic workspace"}`
+  const destinationInput =
+    notionState.destination?.destinationInput || notionState.destination?.destinationUrl || notionState.destination?.destinationPageId || "";
+  elements.notionDestinationLine.textContent = destinationInput
+    ? `Destination: ${destinationInput} · page ${notionState.destination.destinationPageId || "unparsed"} · ${
+        notionState.destination.workspaceMode === "class_specific" ? "Class-specific workspace" : "General academic workspace"
+      }`
     : "Destination: not set.";
 
   if (notionState.lastValidation) {
@@ -429,6 +523,133 @@ function renderNotionSummary() {
     ${resultLine}
     ${blockedLine}
     ${buildWarningMarkup(warnings)}
+  `;
+}
+
+function populateAutomationCourseOptions() {
+  const selectedValue = elements.automationCourseSelect.value;
+  const courseOptions = getAutomationCourseOptions();
+  const options = ['<option value="">Select course</option>'].concat(
+    courseOptions.map((course) => `<option value="${escapeHtml(course.courseId)}">${escapeHtml(course.courseName)}</option>`)
+  );
+  elements.automationCourseSelect.innerHTML = options.join("");
+  if (selectedValue) {
+    elements.automationCourseSelect.value = selectedValue;
+    return;
+  }
+  if (courseOptions.length === 1) {
+    elements.automationCourseSelect.value = courseOptions[0].courseId;
+  }
+}
+
+function renderAutomationPanel() {
+  if (!automationState) {
+    elements.automationStatusLine.textContent = "Loading automation state.";
+    elements.automationReadinessBadge.textContent = "Loading";
+    elements.automationLatestSummary.innerHTML = '<p class="emptyState">Loading automation state.</p>';
+    return;
+  }
+
+  const definitions = automationState.definitions || [];
+  if (!definitions.length) {
+    elements.automationStatusLine.textContent = "No automation definitions available.";
+    elements.automationReadinessBadge.textContent = "Unavailable";
+    elements.automationLatestSummary.innerHTML = '<p class="emptyState">No automation definitions available.</p>';
+    return;
+  }
+
+  if (!definitions.some((definition) => definition.automationId === selectedAutomationId)) {
+    selectedAutomationId = automationState.defaultAutomationId || definitions[0].automationId;
+  }
+
+  const selectedDefinition = getSelectedAutomationDefinition();
+  const availability = getAutomationAvailability(selectedAutomationId) || {
+    state: "idle",
+    label: "Idle",
+    message: "Select an automation."
+  };
+  populateAutomationCourseOptions();
+  syncAutomationControlsVisibility();
+  const activeRun = automationState.activeRunsByAutomationId?.[selectedAutomationId] || null;
+  const latest = getAutomationLatestEntry(selectedAutomationId);
+  const badgeState = activeRun?.status || latest?.status || availability.state;
+  const badgeLabel = activeRun ? formatStatusLabel(activeRun.status) : latest ? formatStatusLabel(latest.status) : availability.label;
+  const customRangeInvalid =
+    elements.automationWindowPreset.value === "custom" &&
+    (!elements.automationStartDate.value || !elements.automationEndDate.value);
+  const needsCourseSelection = selectedDefinition?.targetScope === "course" && !elements.automationCourseSelect.value;
+  const runBlocked = availability.state === "blocked" || customRangeInvalid || needsCourseSelection;
+
+  elements.automationReadinessBadge.textContent = badgeLabel || "Ready";
+  elements.automationReadinessBadge.className = `pill statusPill ${getAutomationBadgeClass(badgeState)}`;
+  elements.automationStatusLine.textContent = activeRun
+    ? `${formatStatusLabel(activeRun.status)} · ${activeRun.windowLabel || "Automation running"}`
+    : runBlocked && customRangeInvalid
+      ? "Select both custom dates before running."
+      : runBlocked && needsCourseSelection
+        ? "Select a course for course recap seed."
+        : availability.message || "Automation ready.";
+
+  elements.automationListContainer.innerHTML = definitions
+    .map((definition) => {
+      const isSelected = definition.automationId === selectedAutomationId;
+      const latestEntry = getAutomationLatestEntry(definition.automationId);
+      const runningEntry = automationState.activeRunsByAutomationId?.[definition.automationId];
+      const availabilityEntry = getAutomationAvailability(definition.automationId) || {
+        label: "Idle"
+      };
+      const stateLabel = runningEntry
+        ? formatStatusLabel(runningEntry.status)
+        : latestEntry
+          ? formatStatusLabel(latestEntry.status)
+          : availabilityEntry.label;
+      const summaryLine = runningEntry?.windowLabel || latestEntry?.headline || definition.description;
+      return `
+        <label class="automationOption ${isSelected ? "isSelected" : ""}">
+          <input type="radio" name="automationType" value="${escapeHtml(definition.automationId)}" ${isSelected ? "checked" : ""}>
+          <span>
+            <p class="automationOptionTitle">${escapeHtml(definition.name)}</p>
+            <p class="courseItemMeta">${escapeHtml(stateLabel)} · ${escapeHtml(summaryLine || definition.description)}</p>
+          </span>
+        </label>
+      `;
+    })
+    .join("");
+
+  elements.automationListContainer.querySelectorAll('input[name="automationType"]').forEach((input) => {
+    input.addEventListener("change", (event) => {
+      selectedAutomationId = event.target.value;
+      renderAutomationPanel();
+    });
+  });
+
+  setAutomationBusy(automationBusy);
+  elements.runAutomationButton.disabled = automationBusy || notionBusy || runBlocked;
+
+  if (!latest) {
+    elements.automationLatestSummary.innerHTML = `
+      <p class="summaryMeta">${escapeHtml(selectedDefinition?.description || "Select an automation.")}</p>
+      <p class="summaryMeta">Window · ${escapeHtml(elements.automationWindowPreset.options[elements.automationWindowPreset.selectedIndex]?.text || "Current week")}</p>
+    `;
+    return;
+  }
+
+  const outputLinks = (latest.outputRefs || [])
+    .slice(0, 6)
+    .map((item) => {
+      if (!item.notionPageUrl) {
+        return `<p class="summaryMeta">${escapeHtml(item.title || item.outputId)}</p>`;
+      }
+      return `<p class="summaryMeta"><a href="${escapeHtml(item.notionPageUrl)}" target="_blank">${escapeHtml(item.title || item.outputId)}</a></p>`;
+    })
+    .join("");
+
+  elements.automationLatestSummary.innerHTML = `
+    <p class="summaryMeta">Latest run · ${escapeHtml(formatStatusLabel(latest.status))} · ${escapeHtml(formatDateTime(latest.updatedAt))}</p>
+    <p class="summaryMeta">${escapeHtml(latest.headline || "No summary available.")}</p>
+    <p class="summaryMeta">Outputs · ${latest.writtenCount || 0} written from ${latest.sourceRecordCounts?.total || 0} source records</p>
+    ${outputLinks || '<p class="summaryMeta">No written output links yet.</p>'}
+    ${buildWarningMarkup(latest.warnings || [])}
   `;
 }
 
@@ -612,6 +833,14 @@ function renderSummary(results) {
   elements.coursesScanned.textContent = String(currentState?.stats?.coursesScanned || 0);
 }
 
+function sanitizeSourceDetail(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return UrlUtils?.looksLikeJavascriptGateText?.(normalized) ? "" : normalized;
+}
+
 function renderExtractionSummary() {
   const summary = currentState?.extractionSummary || {
     total: 0,
@@ -781,8 +1010,9 @@ function renderResults() {
             }
 
             const detailBits = [];
-            if (item.sourcePageTitle) {
-              detailBits.push(item.sourcePageTitle);
+            const sourceDetail = sanitizeSourceDetail(item.sourcePageTitle);
+            if (sourceDetail) {
+              detailBits.push(sourceDetail);
             }
             if (Array.isArray(item.seenInSections) && item.seenInSections.length > 1) {
               detailBits.push(
@@ -878,6 +1108,7 @@ function renderEverything() {
   if (notionState) {
     renderNotionSummary();
   }
+  renderAutomationPanel();
 }
 
 async function refreshNotionState() {
@@ -889,6 +1120,18 @@ async function refreshNotionState() {
 
   notionState = response.notion;
   renderNotionSummary();
+  renderAutomationPanel();
+}
+
+async function refreshAutomationState() {
+  const response = await chrome.runtime.sendMessage({ type: "GET_AUTOMATION_STATE" });
+  if (!response?.ok) {
+    elements.automationStatusLine.textContent = response?.error || "Failed to load automation state.";
+    return;
+  }
+
+  automationState = response.automation;
+  renderAutomationPanel();
 }
 
 async function refreshState() {
@@ -900,6 +1143,38 @@ async function refreshState() {
 
   currentState = response.state;
   renderEverything();
+}
+
+async function runSelectedAutomation() {
+  const definition = getSelectedAutomationDefinition();
+  if (!definition) {
+    return;
+  }
+
+  setAutomationBusy(true);
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "RUN_AUTOMATION",
+      automationId: definition.automationId,
+      windowPreset: elements.automationWindowPreset.value,
+      customStartDate: elements.automationStartDate.value,
+      customEndDate: elements.automationEndDate.value,
+      targetCourseId: definition.targetScope === "course" ? elements.automationCourseSelect.value : ""
+    });
+    if (!response?.ok) {
+      automationState = response?.automation || automationState;
+      renderAutomationPanel();
+      elements.automationStatusLine.textContent = response?.error || "Automation run failed.";
+      return;
+    }
+
+    automationState = response.automation || automationState;
+    renderAutomationPanel();
+  } finally {
+    setAutomationBusy(false);
+    await refreshAutomationState();
+  }
 }
 
 async function saveNotionSettings() {
@@ -1225,6 +1500,11 @@ elements.clearNotionTokenButton.addEventListener("click", clearNotionToken);
 elements.validateWorkspacePlanButton.addEventListener("click", validateNotionSettings);
 elements.planAcademicWorkspaceButton.addEventListener("click", planNotionSync);
 elements.runNotionSyncButton.addEventListener("click", runLiveNotionSync);
+elements.runAutomationButton.addEventListener("click", runSelectedAutomation);
+elements.automationWindowPreset.addEventListener("change", renderAutomationPanel);
+elements.automationStartDate.addEventListener("change", renderAutomationPanel);
+elements.automationEndDate.addEventListener("change", renderAutomationPanel);
+elements.automationCourseSelect.addEventListener("change", renderAutomationPanel);
 elements.notionAccessToken.addEventListener("input", () => {
   notionDraft.accessTokenDirty = true;
   setNotionActionMessage("Token changed. Save or validate to use new token.");
@@ -1260,9 +1540,11 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
   if (
     changes.canvasCourseExportManifest ||
+    changes.notionAuth ||
     changes.notionDestination ||
     changes.notionWorkspacePlan ||
     changes.notionAutomationContract ||
+    changes.notionMappings ||
     changes.notionPlannerSummary ||
     changes.notionSyncJobs ||
     changes.notionLastValidation ||
@@ -1270,6 +1552,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   ) {
     refreshNotionState().catch(() => {});
   }
+
+  if (changes.canvasAutomationDefinitions || changes.canvasAutomationRuns || changes.canvasAutomationLatest) {
+    refreshAutomationState().catch(() => {});
+  }
 });
 
-Promise.all([detectActivePage(), refreshState(), refreshNotionState()]).catch(() => {});
+Promise.all([detectActivePage(), refreshState(), refreshNotionState(), refreshAutomationState()]).catch(() => {});

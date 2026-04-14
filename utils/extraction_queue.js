@@ -51,14 +51,25 @@
 
   function createExtractionState(rawState) {
     const source = rawState || {};
-    return {
-      version: Number(source.version || 1),
-      queue: Array.isArray(source.queue)
-        ? source.queue.map(normalizeJob).map((job) => ({
+    const seenQueuedContentIds = new Set();
+    const normalizedQueue = Array.isArray(source.queue)
+      ? source.queue
+          .map(normalizeJob)
+          .map((job) => ({
             ...job,
             status: job.status === "processing" ? "queued" : job.status
           }))
-        : [],
+          .filter((job) => {
+            if (!job.contentObjectId || seenQueuedContentIds.has(job.contentObjectId)) {
+              return false;
+            }
+            seenQueuedContentIds.add(job.contentObjectId);
+            return true;
+          })
+      : [];
+    return {
+      version: Number(source.version || 1),
+      queue: normalizedQueue,
       jobHistory: Array.isArray(source.jobHistory)
         ? source.jobHistory.map(normalizeJob).slice(0, HISTORY_LIMIT)
         : [],

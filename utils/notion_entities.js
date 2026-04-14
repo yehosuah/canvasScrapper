@@ -171,6 +171,25 @@
     };
   }
 
+  function buildAutomationOutputsDatabaseSchema() {
+    return {
+      Title: titleProperty(),
+      "Output ID": richTextProperty(),
+      "Automation ID": richTextProperty(),
+      "Artifact Type": selectProperty(["overview", "recap", "digest", "study_seed"]),
+      "Run ID": richTextProperty(),
+      "Target Scope": selectProperty(["workspace", "course"]),
+      "Canvas Course IDs": richTextProperty(),
+      "Course Names": richTextProperty(),
+      "Window Start": dateProperty(),
+      "Window End": dateProperty(),
+      "Source Count": numberProperty(),
+      Summary: richTextProperty(),
+      "Created At": dateProperty(),
+      "Updated At": dateProperty()
+    };
+  }
+
   function buildTitleValue(value) {
     return {
       title: textArray(value)
@@ -282,7 +301,34 @@
     };
   }
 
+  function buildAutomationOutputRowProperties(output, run, syncedAt) {
+    const courseIds = Array.isArray(output.relatedCourseIds) && output.relatedCourseIds.length
+      ? output.relatedCourseIds
+      : output.courseId
+        ? [output.courseId]
+        : [];
+    const courseNames = Array.isArray(output.courseNames) ? output.courseNames : [];
+    return {
+      Title: buildTitleValue(output.title || output.outputId || "Automation Output"),
+      "Output ID": buildRichTextValue(output.outputId || ""),
+      "Automation ID": buildRichTextValue(output.automationId || ""),
+      "Artifact Type": buildSelectValue(output.artifactType || "overview"),
+      "Run ID": buildRichTextValue(output.runId || run?.runId || ""),
+      "Target Scope": buildSelectValue(output.targetScope || run?.targetScope || "workspace"),
+      "Canvas Course IDs": buildRichTextValue(courseIds.join(", ")),
+      "Course Names": buildRichTextValue(courseNames.join(", ")),
+      "Window Start": buildDateValue(output.windowStart || run?.windowStart || ""),
+      "Window End": buildDateValue(output.windowEnd || run?.windowEnd || ""),
+      "Source Count": buildNumberValue(output.sourceCount),
+      Summary: buildRichTextValue(output.summary || ""),
+      "Created At": buildDateValue(output.createdAt || syncedAt),
+      "Updated At": buildDateValue(syncedAt)
+    };
+  }
+
   globalThis.CanvasNotionEntities = {
+    buildAutomationOutputRowProperties,
+    buildAutomationOutputsDatabaseSchema,
     buildContentDatabaseSchema,
     buildContentRowProperties,
     buildCourseRowProperties,

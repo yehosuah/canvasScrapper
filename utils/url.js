@@ -67,6 +67,12 @@
     "utm_term",
     "utm_content"
   ]);
+  const JAVASCRIPT_GATE_TEXT_SNIPPETS = [
+    "debe tener activado javascript para poder acceder a este sitio",
+    "you need to enable javascript to run this app",
+    "you need to enable javascript to access this site",
+    "javascript is required to access this site"
+  ];
   const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g;
   const WHITESPACE_RE = /\s+/g;
   const TRAILING_DOTS_RE = /^[.\s]+|[.\s]+$/g;
@@ -326,6 +332,29 @@
     }
   }
 
+  function looksLikeJavascriptGateText(value) {
+    const normalized = String(value || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+
+    const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+    return wordCount <= 40 && JAVASCRIPT_GATE_TEXT_SNIPPETS.some((snippet) => normalized.includes(snippet));
+  }
+
+  function isCanvasFilePreviewUrl(rawUrl, baseUrl) {
+    const resolved = safeUrl(rawUrl, baseUrl);
+    if (!resolved) {
+      return false;
+    }
+
+    const url = new URL(resolved);
+    return Boolean(extractCanvasFileId(resolved)) && (url.pathname.includes("/files/") || url.searchParams.has("preview"));
+  }
+
   function extractFileNameFromUrl(rawUrl, baseUrl) {
     const resolved = safeUrl(rawUrl, baseUrl);
     if (!resolved) {
@@ -436,12 +465,14 @@
     getSectionPriority,
     guessExtension,
     inferSectionFromUrl,
+    isCanvasFilePreviewUrl,
     isDashboardUrl,
     isCanvasCourseUrl,
     isDocumentExtension,
     isIgnoredCourseRoute,
     isInternalToOrigin,
     isLikelyCanvasHost,
+    looksLikeJavascriptGateText,
     isSameCourseUrl,
     safeUrl,
     sanitizePathSegment

@@ -39,8 +39,8 @@
     if (course.term) {
       lines.splice(1, 0, `Term: ${course.term}`);
     }
-    if (destination.destinationUrl) {
-      lines.push(`Parent workspace: ${destination.destinationUrl}`);
+    if (destination.destinationUrl || destination.destinationInput) {
+      lines.push(`Parent workspace: ${destination.destinationUrl || destination.destinationInput}`);
     }
     return Blocks.htmlToBlocks("", lines.join("\n\n"));
   }
@@ -376,7 +376,8 @@
         courses: null,
         content: null,
         deliverables: null,
-        studyAssets: null
+        studyAssets: null,
+        automationOutputs: mappings.workspace?.databases?.automationOutputs || null
       },
       courseHubs: {
         ...(mappings.workspace?.courseHubs || {})

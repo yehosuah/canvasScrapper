@@ -161,6 +161,7 @@ export type NotionValidationStatus = "ok" | "warning" | "blocked";
 export type NotionWorkspaceMode = "general" | "class_specific";
 
 export type NotionDestination = {
+  destinationInput: string;
   destinationUrl: string;
   destinationPageId: string;
   workspaceMode: NotionWorkspaceMode;
@@ -430,6 +431,7 @@ export type NotionWorkspaceMappings = {
       content: { id: string; action?: string } | null;
       deliverables: { id: string; action?: string } | null;
       studyAssets: { id: string; action?: string } | null;
+      automationOutputs: { id: string; action?: string } | null;
     };
     courseHubs: Record<
       string,
@@ -470,6 +472,143 @@ export type NotionWorkspaceMappings = {
       lastStatus?: string;
     }
   >;
+  automationEntries: Record<
+    string,
+    {
+      pageId: string;
+      lastSynced?: string;
+      lastStatus?: string;
+      syncedBlockIds?: string[];
+      notionPageUrl?: string;
+    }
+  >;
+};
+
+export type AutomationWindowType = "weekly" | "rolling" | "custom";
+
+export type AutomationWindowPreset = "current_week" | "last_7_days" | "custom";
+
+export type AutomationRunStatus =
+  | "idle"
+  | "planning"
+  | "collecting"
+  | "generating"
+  | "writing"
+  | "completed"
+  | "failed"
+  | "blocked";
+
+export type AutomationTargetScope = "workspace" | "course";
+
+export type AutomationInputSources = "content" | "tasks" | "both";
+
+export type AutomationOutputType = "overview" | "recap" | "study_seed";
+
+export type AutomationArtifactType = "overview" | "recap" | "digest" | "study_seed";
+
+export type AutomationCadence = "manual" | "weekly";
+
+export type AutomationDefinition = {
+  automationId: string;
+  slug: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  outputType: AutomationOutputType;
+  targetScope: AutomationTargetScope;
+  inputSources: AutomationInputSources;
+  defaultWindowType: AutomationWindowType;
+  cadence: AutomationCadence;
+};
+
+export type AutomationInputWindow = {
+  windowType: AutomationWindowType;
+  windowPreset: AutomationWindowPreset;
+  label: string;
+  start: string;
+  end: string;
+  startDate: string;
+  endDate: string;
+  timeZone: string;
+  valid: boolean;
+};
+
+export type AutomationRun = {
+  runId: string;
+  automationId: string;
+  status: AutomationRunStatus;
+  startedAt: string;
+  completedAt?: string | null;
+  targetScope: AutomationTargetScope;
+  targetCourseIds: string[];
+  windowPreset: AutomationWindowPreset;
+  windowType: AutomationWindowType;
+  windowLabel: string;
+  windowStart: string;
+  windowEnd: string;
+  sourceRecordCounts: {
+    tasks: number;
+    content: number;
+    total: number;
+  };
+  warnings: string[];
+  errorMessage?: string;
+  outputIds: string[];
+  destinationPageId?: string;
+};
+
+export type AutomationArtifact = {
+  artifactId: string;
+  outputId: string;
+  artifactType: AutomationArtifactType;
+  content: string;
+  metadata: Record<string, unknown>;
+};
+
+export type AutomationOutput = {
+  outputId: string;
+  runId: string;
+  automationId: string;
+  courseId?: string | null;
+  relatedCourseIds: string[];
+  courseNames: string[];
+  title: string;
+  summary: string;
+  artifactType: AutomationArtifactType;
+  targetScope: AutomationTargetScope;
+  windowStart: string;
+  windowEnd: string;
+  sourceCount: number;
+  structuredPayload: Record<string, unknown>;
+  notionPageId?: string | null;
+  notionDatabaseEntryId?: string | null;
+  notionPageUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  artifacts: AutomationArtifact[];
+};
+
+export type AutomationResultSummary = {
+  automationId: string;
+  runId: string;
+  status: AutomationRunStatus;
+  headline: string;
+  outputCount: number;
+  writtenCount: number;
+  sourceRecordCounts: {
+    tasks: number;
+    content: number;
+    total: number;
+  };
+  warnings: string[];
+  outputRefs: Array<{
+    outputId: string;
+    title: string;
+    courseId?: string | null;
+    notionPageId?: string | null;
+    notionPageUrl?: string;
+  }>;
+  updatedAt: string;
 };
 
 export type AutomationReadyRecord = {

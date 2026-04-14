@@ -49,20 +49,28 @@
     const blockedReasons = [];
     const manifestSummary = buildManifestSummary(manifest);
     const plannerSummary = Models.createPlannerSummary(workspacePlan?.summary);
+    const destinationInput = destination.destinationInput || "";
 
-    if (!destination.destinationUrl) {
-      blockedReasons.push("Destination page URL is required.");
-      pushCheck(checks, "destination_url", "blocked", "Paste a Notion destination page URL.");
-    } else if (!Destination.isValidNotionUrl(destination.destinationUrl)) {
-      blockedReasons.push("Destination must be a valid Notion page URL.");
-      pushCheck(checks, "destination_url", "blocked", "Destination URL is not a valid Notion URL.");
+    if (!destinationInput) {
+      blockedReasons.push("Destination page URL or page ID is required.");
+      pushCheck(checks, "destination_input", "blocked", "Paste a Notion destination page URL or raw page ID.");
+    } else if (destination.destinationUrl) {
+      pushCheck(checks, "destination_input", "ok", "Destination Notion page URL saved locally.");
+    } else if (Destination.isValidRawPageId(destinationInput)) {
+      pushCheck(checks, "destination_input", "ok", "Destination raw Notion page ID saved locally.");
     } else {
-      pushCheck(checks, "destination_url", "ok", "Destination page URL saved locally.");
+      blockedReasons.push("Destination must be a valid Notion page URL or raw page ID.");
+      pushCheck(
+        checks,
+        "destination_input",
+        "blocked",
+        "Destination input is not a valid Notion page URL or raw page ID."
+      );
     }
 
     if (!destination.destinationPageId) {
-      blockedReasons.push("No parseable Notion page ID found in destination URL.");
-      pushCheck(checks, "destination_page_id", "blocked", "Destination URL did not yield a page ID.");
+      blockedReasons.push("No parseable Notion page ID found in destination input.");
+      pushCheck(checks, "destination_page_id", "blocked", "Destination input did not yield a page ID.");
     } else {
       pushCheck(checks, "destination_page_id", "ok", `Parsed page ID ${destination.destinationPageId}.`);
     }

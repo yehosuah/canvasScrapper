@@ -11,6 +11,29 @@
     throw new Error("Canvas content script dependencies did not load.");
   }
 
+  function createEmptyScanResult(request, pageUrl) {
+    return {
+      ok: true,
+      pageUrl: pageUrl || request.url,
+      course: {
+        origin: request.origin,
+        courseId: request.courseId,
+        courseName: request.courseName,
+        isCanvasCourse: true
+      },
+      pageTitle: "",
+      documents: [],
+      contentItems: [],
+      followUrls: [],
+      paginationUrls: [],
+      stats: {
+        downloadableCount: 0,
+        externalCount: 0,
+        ignoredCount: 0
+      }
+    };
+  }
+
   function scanDocument(doc, pageUrl, options) {
     const metadata = ExtractUtils.extractCourseMetadata(doc, pageUrl);
     if (!metadata.isCanvasCourse) {
@@ -25,7 +48,7 @@
       courseId: metadata.courseId,
       courseName: options.courseName || metadata.courseName,
       pageUrl,
-      sourceSection: options.sourceSection || metadata.section || "home"
+      sourceSection: metadata.section === "files" ? "files" : options.sourceSection || metadata.section || "home"
     };
     const artifacts = ExtractUtils.extractPageArtifacts(doc, context);
 
@@ -56,32 +79,51 @@
     }
 
     const contentType = response.headers.get("content-type") || "";
+    const resolvedUrl = response.url || request.url;
     if (!contentType.includes("text/html")) {
-      return {
-        ok: true,
-        pageUrl: response.url || request.url,
-        course: {
-          origin: request.origin,
-          courseId: request.courseId,
-          courseName: request.courseName,
-          isCanvasCourse: true
-        },
-        pageTitle: "",
-        documents: [],
-        contentItems: [],
-        followUrls: [],
-        paginationUrls: [],
-        stats: {
-          downloadableCount: 0,
-          externalCount: 0,
-          ignoredCount: 0
-        }
-      };
+      return createEmptyScanResult(request, resolvedUrl);
     }
 
     const html = await response.text();
+    if (request.sourceSection !== "files" && UrlUtils.isCanvasFilePreviewUrl(resolvedUrl, request.origin)) {
+      return createEmptyScanResult(request, resolvedUrl);
+    }
+    if (request.sourceSection !== "files" && UrlUtils.looksLikeJavascriptGateText(html)) {
+      return createEmptyScanResult(request, resolvedUrl);
+    }
     const parsed = new DOMParser().parseFromString(html, "text/html");
-    return scanDocument(parsed, response.url || request.url, request);
+    return scanDocument(parsed, resolvedUrl, request);
+  }
+
+  async function fetchResourceForExtraction(request) {
+    const response = await fetch(request.url, {
+      credentials: request.credentials || "include",
+      redirect: "follow"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed with ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    const result = {
+      ok: true,
+      url: response.url || request.url,
+      contentType,
+      status: response.status
+    };
+
+    if (request.mode === "fetch_binary") {
+      if (/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+        result.text = await response.text();
+        return result;
+      }
+      result.buffer = await response.arrayBuffer();
+      return result;
+    }
+
+    result.text = await response.text();
+    return result;
   }
 
   function detectCourse() {
@@ -139,6 +181,11 @@
 
       if (message.type === "FETCH_AND_SCRAPE") {
         sendResponse(await fetchAndScanUrl(message));
+        return;
+      }
+
+      if (message.type === "FETCH_RESOURCE_FOR_EXTRACTION") {
+        sendResponse(await fetchResourceForExtraction(message));
         return;
       }
 

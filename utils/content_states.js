@@ -108,6 +108,20 @@
     return Boolean(trimString(source.bodyHtml) || trimString(source.bodyText));
   }
 
+  function sanitizeSourcePageTitle(value, fallback) {
+    const normalized = trimString(value);
+    if (!normalized || UrlUtils.looksLikeJavascriptGateText(normalized)) {
+      return trimString(fallback);
+    }
+    return normalized;
+  }
+
+  function isBogusFilePreviewContentItem(contentItem) {
+    const sourceUrl = trimString(contentItem?.sourcePageUrl || contentItem?.sourceCanvasUrl);
+    const candidateText = trimString(contentItem?.bodyText || contentItem?.excerpt || contentItem?.sourcePageTitle);
+    return Boolean(sourceUrl) && UrlUtils.isCanvasFilePreviewUrl(sourceUrl) && UrlUtils.looksLikeJavascriptGateText(candidateText);
+  }
+
   function getEligibleAutomations(contentType, contentPathType) {
     if (contentType === "deliverable") {
       return ["weekly_task_overview", "class_summary"];
@@ -282,7 +296,7 @@
       courseName: documentItem.courseName,
       sourceCanvasUrl: documentItem.sourcePageUrl || documentItem.url,
       sourceSection: documentItem.sourceSection,
-      sourcePageTitle: documentItem.sourcePageTitle || documentItem.fileName || documentItem.linkText,
+      sourcePageTitle: sanitizeSourcePageTitle(documentItem.sourcePageTitle, documentItem.fileName || documentItem.linkText),
       sourcePageUrl: documentItem.sourcePageUrl || "",
       discoveredAt: documentItem.discoveredAt,
       contentPathType: "direct_ingest",
@@ -301,7 +315,7 @@
       courseName: documentItem.courseName,
       sourceCanvasUrl: documentItem.sourcePageUrl || documentItem.url,
       sourceSection: "assignments",
-      sourcePageTitle: documentItem.sourcePageTitle || documentItem.fileName || documentItem.linkText,
+      sourcePageTitle: sanitizeSourcePageTitle(documentItem.sourcePageTitle, documentItem.fileName || documentItem.linkText),
       sourcePageUrl: documentItem.sourcePageUrl || "",
       discoveredAt: documentItem.discoveredAt,
       contentPathType: "direct_ingest",
@@ -330,7 +344,7 @@
       courseName: contentItem.courseName,
       sourceCanvasUrl: contentItem.sourceCanvasUrl || contentItem.sourcePageUrl || contentItem.externalUrl || "",
       sourceSection: contentItem.sourceSection,
-      sourcePageTitle: contentItem.sourcePageTitle || contentItem.title,
+      sourcePageTitle: sanitizeSourcePageTitle(contentItem.sourcePageTitle, contentItem.title),
       sourcePageUrl: contentItem.sourcePageUrl || "",
       discoveredAt: contentItem.discoveredAt,
       contentPathType,
@@ -357,7 +371,7 @@
       courseName: contentItem.courseName,
       sourceCanvasUrl: contentItem.sourceCanvasUrl || contentItem.sourcePageUrl,
       sourceSection: "assignments",
-      sourcePageTitle: contentItem.sourcePageTitle || "Canvas deliverable",
+      sourcePageTitle: sanitizeSourcePageTitle(contentItem.sourcePageTitle, "Canvas deliverable"),
       sourcePageUrl: contentItem.sourcePageUrl || "",
       discoveredAt: contentItem.discoveredAt,
       contentPathType: hasDirectContentBody(contentItem) ? "direct_ingest" : "unknown",
@@ -380,7 +394,7 @@
       courseName: documentItem.courseName,
       sourceCanvasUrl: documentItem.url,
       sourceSection: documentItem.sourceSection,
-      sourcePageTitle: documentItem.sourcePageTitle || documentItem.fileName || documentItem.linkText,
+      sourcePageTitle: sanitizeSourcePageTitle(documentItem.sourcePageTitle, documentItem.fileName || documentItem.linkText),
       sourcePageUrl: documentItem.sourcePageUrl || "",
       discoveredAt: documentItem.discoveredAt,
       contentPathType: documentItem.isDownloadable ? "file_artifact" : "unknown",
@@ -405,6 +419,7 @@
     const courses = Array.isArray(manifestLike?.courses) ? manifestLike.courses : [];
     const documents = Array.isArray(manifestLike?.documents) ? manifestLike.documents : [];
     const contentItems = Array.isArray(manifestLike?.contentItems) ? manifestLike.contentItems : [];
+    const usableContentItems = contentItems.filter((contentItem) => !isBogusFilePreviewContentItem(contentItem));
     const records = [];
     const pageRecords = new Map();
     const deliverableRecords = new Map();
@@ -413,7 +428,7 @@
       records.push(createCourseInventoryRecord(course));
     }
 
-    for (const contentItem of contentItems) {
+    for (const contentItem of usableContentItems) {
       const inventoryRecord = createContentItemInventoryRecord(contentItem);
       const inventoryKey = `${inventoryRecord.contentType}:${inventoryRecord.courseId}:${inventoryRecord.sourcePageUrl || inventoryRecord.externalUrl || inventoryRecord.sourcePageTitle}`;
       if (!pageRecords.has(inventoryKey)) {
@@ -430,7 +445,7 @@
 
     for (const documentItem of documents) {
       if (
-        !contentItems.length &&
+        !usableContentItems.length &&
         isDirectIngestSection(documentItem.sourceSection) &&
         trimString(documentItem.sourcePageUrl || documentItem.sourcePageTitle)
       ) {
@@ -444,7 +459,7 @@
       }
 
       if (
-        !contentItems.length &&
+        !usableContentItems.length &&
         documentItem.sourceSection === "assignments" &&
         trimString(documentItem.sourcePageUrl || documentItem.sourcePageTitle)
       ) {

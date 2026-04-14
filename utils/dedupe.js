@@ -66,11 +66,23 @@
     return incomingValue.length > existingValue.length ? incomingValue : existingValue;
   }
 
+  function pickBetterPageTitle(existingValue, incomingValue) {
+    const existingLooksBroken = UrlUtils.looksLikeJavascriptGateText(existingValue);
+    const incomingLooksBroken = UrlUtils.looksLikeJavascriptGateText(incomingValue);
+    if (existingLooksBroken && !incomingLooksBroken) {
+      return incomingValue;
+    }
+    if (incomingLooksBroken && !existingLooksBroken) {
+      return existingValue;
+    }
+    return pickBetterValue(existingValue, incomingValue);
+  }
+
   function mergeDocument(existingDocument, incomingDocument) {
     const merged = { ...existingDocument };
     merged.sourceSection = choosePreferredSource(existingDocument.sourceSection, incomingDocument.sourceSection);
     merged.courseName = pickBetterValue(existingDocument.courseName, incomingDocument.courseName);
-    merged.sourcePageTitle = pickBetterValue(existingDocument.sourcePageTitle, incomingDocument.sourcePageTitle);
+    merged.sourcePageTitle = pickBetterPageTitle(existingDocument.sourcePageTitle, incomingDocument.sourcePageTitle);
     merged.fileName = pickBetterValue(existingDocument.fileName, incomingDocument.fileName);
     merged.linkText = pickBetterValue(existingDocument.linkText, incomingDocument.linkText);
     merged.folderHint = pickBetterValue(existingDocument.folderHint, incomingDocument.folderHint);
@@ -117,7 +129,7 @@
     const merged = { ...existingItem };
     merged.sourceSection = choosePreferredSource(existingItem.sourceSection, incomingItem.sourceSection);
     merged.courseName = pickBetterValue(existingItem.courseName, incomingItem.courseName);
-    merged.sourcePageTitle = pickBetterValue(existingItem.sourcePageTitle, incomingItem.sourcePageTitle);
+    merged.sourcePageTitle = pickBetterPageTitle(existingItem.sourcePageTitle, incomingItem.sourcePageTitle);
     merged.title = pickBetterValue(existingItem.title, incomingItem.title);
     merged.bodyHtml = pickBetterValue(existingItem.bodyHtml, incomingItem.bodyHtml);
     merged.bodyText = pickBetterValue(existingItem.bodyText, incomingItem.bodyText);

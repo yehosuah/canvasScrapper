@@ -23,9 +23,11 @@
   "host_permissions": [
     "https://*.canvaslms.com/*",
     "https://*.instructure.com/*",
+    "https://*.canvas-user-content.com/*",
     "https://api.notion.com/*"
   ],
   "optional_host_permissions": [
-    "https://*/*"
+    "https://*/*",
+    "http://*/*"
   ]
 }

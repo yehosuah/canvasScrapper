@@ -47,13 +47,22 @@
     };
   }
 
+  function getDestinationReference(destination) {
+    return destination.destinationUrl || destination.destinationInput || null;
+  }
+
   function buildCoursesDatabasePlan(destination) {
     return buildPlanObject({
       planObjectId: "top:courses_database",
       planType: "courses_database",
       objectType: "database",
       title: "Courses",
-      parentTarget: buildParentTarget("destination_page", destination.destinationPageId, destination.label, destination.destinationUrl),
+      parentTarget: buildParentTarget(
+        "destination_page",
+        destination.destinationPageId,
+        destination.label,
+        getDestinationReference(destination)
+      ),
       plannedProperties: [
         buildProperty("Name", "title", "Course display name."),
         buildProperty("Course ID", "rich_text", "Stable Canvas course identifier."),
@@ -142,7 +151,12 @@
       planType: "course_hub",
       objectType: "page",
       title: `${course.courseName} Hub`,
-      parentTarget: buildParentTarget("destination_page", destination.destinationPageId, destination.label, destination.destinationUrl),
+      parentTarget: buildParentTarget(
+        "destination_page",
+        destination.destinationPageId,
+        destination.label,
+        getDestinationReference(destination)
+      ),
       plannedProperties: [
         buildProperty("Canvas URL", "url", "Course traceability."),
         buildProperty("Course ID", "rich_text", "Stable Canvas course identifier.")
@@ -177,7 +191,12 @@
       contentDatabase: buildParentTarget("planned_database", null, "Content database", null, "top:content_database"),
       deliverablesDatabase: buildParentTarget("planned_database", null, "Deliverables database", null, "top:deliverables_database"),
       studyAssetsDatabase: buildParentTarget("planned_database", null, "Study Assets database", null, "top:study_assets_database"),
-      contentDatabaseContainer: buildParentTarget("destination_page", destination.destinationPageId, destination.label, destination.destinationUrl)
+      contentDatabaseContainer: buildParentTarget(
+        "destination_page",
+        destination.destinationPageId,
+        destination.label,
+        getDestinationReference(destination)
+      )
     };
   }
 
@@ -370,7 +389,7 @@
       "destination_page",
       destination.destinationPageId,
       destination.label,
-      destination.destinationUrl
+      getDestinationReference(destination)
     );
     return [
       buildCoursesDatabasePlan(destination),
@@ -445,11 +464,11 @@
     const blockedReasons = [];
     const warnings = [];
 
-    if (!destination.destinationUrl) {
-      blockedReasons.push("Paste a Notion destination page URL before planning.");
+    if (!destination.destinationInput) {
+      blockedReasons.push("Paste a Notion destination page URL or page ID before planning.");
     }
     if (!destination.destinationPageId) {
-      blockedReasons.push("Destination URL does not contain a parseable Notion page ID.");
+      blockedReasons.push("Destination input does not contain a parseable Notion page ID.");
     }
     if (!courses.length && !contentInventory.length) {
       blockedReasons.push("No scanned Canvas data found. Run a Canvas scan first.");

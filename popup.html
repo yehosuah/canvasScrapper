@@ -19,7 +19,7 @@
         <div class="sectionHeader">
           <div>
             <h2>Notion Auth And Destination</h2>
-            <p id="notionStatusLine" class="status">Save token and destination, then validate access before sync.</p>
+            <p id="notionStatusLine" class="status">Save token and destination page URL or ID, then validate access before sync.</p>
           </div>
           <span id="notionReadinessBadge" class="pill">Destination needed</span>
         </div>
@@ -31,9 +31,9 @@
             <small class="fieldHint">Manual internal integration token. Leave blank to keep saved token.</small>
           </label>
           <label class="field fieldWide">
-            <span>Notion destination page URL</span>
-            <input id="notionDestinationUrl" type="text" placeholder="https://www.notion.so/...">
-            <small class="fieldHint">Paste parent page user shared with integration.</small>
+            <span>Notion destination page URL or page ID</span>
+            <input id="notionDestinationUrl" type="text" placeholder="https://www.notion.so/... or 32-char page ID">
+            <small class="fieldHint">Paste shared parent page URL or raw Notion page ID.</small>
           </label>
         </div>
 
@@ -59,7 +59,7 @@
 
         <div class="infoStack">
           <p id="notionAuthLine" class="itemDetail">Auth: token missing.</p>
-          <p id="notionActionLine" class="itemDetail">Action: waiting for token and destination.</p>
+          <p id="notionActionLine" class="itemDetail">Action: waiting for token and destination page URL or ID.</p>
           <p id="notionDestinationLine" class="itemDetail">Destination: not set.</p>
           <p id="notionLastValidationLine" class="itemDetail">Validation: not run.</p>
           <p id="notionLatestJobLine" class="itemDetail">Latest sync: idle.</p>
@@ -78,6 +78,55 @@
 
         <section id="notionPlanSummary" class="notionSummary">
           <p class="emptyState">No academic workspace plan yet.</p>
+        </section>
+      </section>
+
+      <section class="controls automationPanel">
+        <div class="sectionHeader">
+          <div>
+            <h2>Automation Layer</h2>
+            <p id="automationStatusLine" class="status">Run deterministic Notion-side academic automations.</p>
+          </div>
+          <span id="automationReadinessBadge" class="pill">Loading</span>
+        </div>
+
+        <div id="automationListContainer" class="automationList">
+          <p class="emptyState">Loading automations.</p>
+        </div>
+
+        <div class="notionFieldGrid">
+          <label class="field">
+            <span>Window</span>
+            <select id="automationWindowPreset">
+              <option value="current_week">Current week</option>
+              <option value="last_7_days">Last 7 days</option>
+              <option value="custom">Custom range</option>
+            </select>
+          </label>
+          <div id="automationCustomRangeFields" class="fieldGridInline hidden">
+            <label class="field">
+              <span>Start</span>
+              <input id="automationStartDate" type="date">
+            </label>
+            <label class="field">
+              <span>End</span>
+              <input id="automationEndDate" type="date">
+            </label>
+          </div>
+          <label id="automationCourseField" class="field hidden">
+            <span>Course</span>
+            <select id="automationCourseSelect">
+              <option value="">Select course</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="buttonRow">
+          <button id="runAutomationButton" class="primary">Run Automation</button>
+        </div>
+
+        <section id="automationLatestSummary" class="notionSummary">
+          <p class="emptyState">No automation run yet.</p>
         </section>
       </section>
 
@@ -199,6 +248,7 @@
       </section>
     </main>
 
+    <script src="utils/url.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
