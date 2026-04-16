@@ -6,6 +6,7 @@ Manifest V3 Chrome extension for:
 - downloading Canvas-hosted artifacts locally
 - ingesting structured academic content into Notion
 - extracting, normalizing, chunking, and tracking content for later Codex automations
+- running deterministic academic automations from synced Notion workspace data
 
 Product intent:
 
@@ -13,9 +14,9 @@ This repo is not "Canvas downloader + Notion export."
 
 It is a content-ready academic knowledge system:
 
-Canvas -> normalized records -> extracted text -> chunks -> Notion enrichment -> future automation inputs.
+Canvas -> normalized records -> extracted text -> chunks -> Notion enrichment -> Notion-side automation inputs -> automation outputs.
 
-## Phase 4 status
+## Phase 5 status
 
 Implemented now:
 
@@ -27,6 +28,14 @@ Implemented now:
 - extraction metadata, queue state, chunk records, and enrichment results persist in `chrome.storage.local`
 - extracted content is chunked deterministically with stable-enough chunk IDs for later updates
 - Notion sync can reflect extraction status, extracted text presence, chunk count, and enriched page content
+- Phase 5 automation definitions persist in `chrome.storage.local`
+- Phase 5 reads content and deliverables from synced Notion databases, not from Canvas scraping paths
+- Phase 5 writes first-class automation output pages into a dedicated `Automation Outputs` database in Notion
+- popup now supports manual runs for:
+  - `weekly_tasks_overview`
+  - `weekly_content_overview`
+  - `course_recap_seed`
+- generation is deterministic now, with a clean no-op adapter boundary for future Codex/LLM enhancement
 
 Still not implemented:
 
@@ -34,7 +43,9 @@ Still not implemented:
 - PPT/PPTX extraction
 - XLS/XLSX extraction
 - legacy `.doc` extraction
-- flashcards, review questions, weekly digests, or other automation outputs
+- scheduled/background automation runs
+- live LLM-enhanced generation
+- flashcards or quiz generation beyond recap seed scaffolding
 
 ## Phase 4 pipeline
 
@@ -146,7 +157,7 @@ Chunk IDs are derived from source record + chunk index + chunk text hash, so rep
 
 ## Notion enrichment representation
 
-Phase 4 does not redesign the Notion model. It extends the existing `Content` database and synced page bodies.
+Phase 5 keeps existing Notion ingestion model, then layers automation outputs on top.
 
 Content rows now track extra properties such as:
 
@@ -168,6 +179,41 @@ Synced Notion content pages now:
 - append extracted content when available
 - distinguish raw artifact present vs extracted text present vs chunked/automation-ready local state
 
+Automation outputs now write into a dedicated `Automation Outputs` database:
+
+- one row/page per generated output
+- deterministic page body sections for overview/recap/study-seed content
+- source reference section with Notion and Canvas links when available
+- metadata/code block for run traceability, source ids, and warning state
+
+Current automation output behavior:
+
+- `weekly_tasks_overview`
+  - urgent items
+  - due-this-window items grouped by course
+  - metadata-gap section for missing due dates
+- `weekly_content_overview`
+  - workspace-level grouped recap
+  - per-course recap objects for courses with matching content
+- `course_recap_seed`
+  - major topics
+  - key content items
+  - candidate study concepts
+
+Deterministic now:
+
+- sorting/grouping of tasks by due date and course
+- grouping content by course and content type
+- heading/topic aggregation from synced Notion page bodies
+- structured recap seed generation from title/heading/snippet patterns
+
+Reserved for future AI enhancement:
+
+- deeper semantic summarization
+- flashcards and quizzes
+- richer concept extraction
+- scheduled Codex-style weekly runs
+
 ## Storage keys
 
 Existing:
@@ -188,6 +234,12 @@ New/extended for Phase 4:
 
 - `canvasContentExtractionState`
 
+New for Phase 5:
+
+- `canvasAutomationDefinitions`
+- `canvasAutomationRuns`
+- `canvasAutomationLatest`
+
 Stored there:
 
 - extraction queue
@@ -195,6 +247,7 @@ Stored there:
 - extraction records keyed by `contentObjectId`
 - chunk records keyed by `contentObjectId`
 - latest Notion enrichment result
+- latest automation result summaries and output references
 
 `canvasCourseScanState` also carries compact `extractionSummary` for popup rendering.
 
@@ -221,6 +274,16 @@ Stored there:
   extended Notion schema/property mapping for extraction-aware rows
 - [utils/notion_workspace.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/notion_workspace.js)
   schema upgrade + extracted-content page sync
+- [utils/automation_models.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/automation_models.js)
+  automation definitions, run models, and window helpers
+- [utils/automation_collect.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/automation_collect.js)
+  Notion-side collection of content and deliverable inputs
+- [utils/automation_generate.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/automation_generate.js)
+  deterministic overview and recap generation
+- [utils/automation_writer.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/automation_writer.js)
+  Notion `Automation Outputs` database writes and page-body rendering
+- [utils/automation_runs.js](/Users/yehosuahercules/Desktop/Misc./canvasScrapper/utils/automation_runs.js)
+  run lifecycle orchestration and latest-result summaries
 
 ## Known limits
 
@@ -229,6 +292,10 @@ Stored there:
 - Chrome local storage is still being used for extracted text and chunk payloads. `unlimitedStorage` helps, but very large corpora will eventually need a more specialized local persistence strategy.
 - Notion page bodies can become large for long extracted documents. Current behavior is pragmatic, not optimized for huge multi-hundred-page artifacts.
 - Local Chrome download completion is separate from extraction fetches. Phase 4 extraction uses source fetches plus saved provenance; it does not read arbitrary local files from disk.
+- Weekly task overview does not use a completion/status field yet because deliverable schema does not currently persist one.
+- Automation collectors depend on current synced Notion workspace mappings. If destination changes, run live sync again before automation runs.
+- `current week` uses Monday-Sunday in browser locale time.
+- Scheduling metadata exists on definitions, but no automatic weekly trigger runs yet.
 
 ## Auth setup
 
@@ -242,10 +309,11 @@ Setup:
 4. Validate.
 5. Plan or run live sync.
 6. Use Phase 4 extraction controls when scan data is ready.
+7. Run Phase 5 automation layer from popup after sync completes.
 
 ## Test checklist
 
-Minimum manual/CLI verification for Phase 4:
+Minimum manual/CLI verification for Phase 5:
 
 - `node --check background.js`
 - `node --check popup.js`
@@ -257,6 +325,9 @@ Minimum manual/CLI verification for Phase 4:
 - confirm chunking is deterministic for identical input
 - confirm scan flow still produces documents/content items without runtime errors
 - confirm live Notion sync still validates, plans, and runs
+- confirm `Automation Outputs` database is created lazily on first automation write
+- confirm each manual automation run writes real Notion output pages with source references and metadata block
+- confirm popup preserves latest run summary and output references after reload
 
 ## User flow
 
